@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
@@ -15,19 +14,21 @@ class _LoginScreenState extends State<LoginScreen> {
   final AuthService authService = AuthService();
 
   void login() async {
-    User? user = await authService.signIn(
+    AuthResult result = await authService.signIn(
       emailController.text.trim(),
       passwordController.text.trim(),
     );
 
-    if (user != null) {
+    if (result.user != null) {
+      // Login successful
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HomeScreen()),
       );
     } else {
+      // Login failed, display error message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login Failed")),
+        SnackBar(content: Text(result.message)),
       );
     }
   }
@@ -60,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 );
               },
               child: Text("Don't have an account? Sign Up"),
-            )
+            ),
           ],
         ),
       ),

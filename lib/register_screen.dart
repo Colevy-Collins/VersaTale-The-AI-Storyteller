@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
 import 'home_screen.dart';
 
@@ -14,19 +13,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final AuthService authService = AuthService();
 
   void register() async {
-    User? user = await authService.signUp(
+    AuthResult result = await authService.signUp(
       emailController.text.trim(),
       passwordController.text.trim(),
     );
 
-    if (user != null) {
+    if (result.user != null) {
+      // Registration successful
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HomeScreen()),
       );
     } else {
+      // Registration failed, display error message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Registration Failed")),
+        SnackBar(content: Text(result.message)),
       );
     }
   }
