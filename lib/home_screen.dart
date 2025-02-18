@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'login_screen.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -12,10 +13,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final AuthService authService = AuthService();
   final TextEditingController textController = TextEditingController();
   final List<String> menuItems = [
-    "Action 1",
-    "Action 2",
-    "Action 3",
-    "Action 4"
+    "First Option",
+    "Second Option",
   ];
 
   // Replace with your Cloud Run backend URL.
@@ -33,6 +32,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       textController.text += "$item selected\n";
     });
+
+    // Call the backend with the selected decision.
+    callBackend(item);
   }
 
   void showButtonMenu(BuildContext context) {
@@ -46,11 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
               itemCount: menuItems.length,
               itemBuilder: (context, index) {
                 return ListTile(
-                  title: Text(menuItems[index]),
-                  onTap: () {
-                    onMenuItemSelected(menuItems[index]);
-                    Navigator.pop(context); // Close menu
-                  },
+                  title: ElevatedButton(
+                    onPressed: () {
+                      onMenuItemSelected(menuItems[index]);
+                      Navigator.pop(context); // Close menu
+                    },
+                    child: Text(menuItems[index]),
+                  ),
                 );
               },
             ),
@@ -60,8 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // New function to call the backend
-  Future<void> callBackend() async {
+  // Function to call the backend and send the decision
+  Future<void> callBackend(String decision) async {
     try {
       // Retrieve a fresh Firebase ID token.
       final token = await authService.getToken();
@@ -73,17 +77,23 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Build the URL for your backend endpoint.
-      final url = Uri.parse(backendUrl);
+      final url = Uri.parse(backendUrl + "/story");
 
-      // Make an authenticated GET request.
-      final response = await http.get(
+      // Make an authenticated POST request.
+      final response = await http.post(
         url,
-        headers: {'Authorization': 'Bearer $token'},
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'decision': decision}),
       );
 
       if (response.statusCode == 200) {
+        // Parse the response and update the story.
+        final responseData = jsonDecode(response.body);
         setState(() {
-          textController.text += "Backend response: ${response.body}\n";
+          textController.text += "New story leg: ${responseData['newLeg']}\n";
         });
       } else {
         setState(() {
@@ -136,11 +146,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () => showButtonMenu(context),
               child: Text("Open Menu"),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: callBackend,
-              child: Text("Call Backend"),
             ),
           ],
         ),
