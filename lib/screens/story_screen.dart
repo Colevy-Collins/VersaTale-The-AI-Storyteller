@@ -4,10 +4,14 @@ import '../services/story_service.dart';
 import 'login_screen.dart';
 
 class StoryScreen extends StatefulWidget {
-  final String? initialLeg;
+  final String initialLeg;
   final List<String> options; // Initial options returned by the backend.
 
-  const StoryScreen({Key? key, this.initialLeg, required this.options}) : super(key: key);
+  const StoryScreen({
+    Key? key,
+    required this.initialLeg,
+    required this.options,
+  }) : super(key: key);
 
   @override
   _StoryScreenState createState() => _StoryScreenState();
@@ -17,17 +21,19 @@ class _StoryScreenState extends State<StoryScreen> {
   final AuthService authService = AuthService();
   final StoryService storyService = StoryService();
   final TextEditingController textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  // Current options provided by the AI.
   late List<String> currentOptions;
+  bool _isRequestInProgress = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialLeg != null) {
-      textController.text = widget.initialLeg!;
-    }
+    // Display the initial story leg and options.
+    textController.text = widget.initialLeg;
     currentOptions = widget.options;
+    // Scroll to bottom after initial frame is built.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   void logout(BuildContext context) async {
@@ -38,12 +44,12 @@ class _StoryScreenState extends State<StoryScreen> {
     );
   }
 
-  void onMenuItemSelected(String item) {
+  void onMenuItemSelected(String decision) {
     setState(() {
-      textController.text += "\n$item selected\n";
+      textController.text += "\n\nUser choice: $decision\n";
     });
-    // Call backend to get the next story leg using the selected decision.
-    getNextStoryLeg(item);
+    // Call backend for the next story leg using the selected decision.
+    getNextStoryLeg(decision);
   }
 
   void showButtonMenu(BuildContext context) {
@@ -52,48 +58,80 @@ class _StoryScreenState extends State<StoryScreen> {
       builder: (context) {
         return Container(
           height: 250,
-          child: Scrollbar(
-            child: ListView.builder(
-              itemCount: currentOptions.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: ElevatedButton(
-                    onPressed: () {
-                      onMenuItemSelected(currentOptions[index]);
-                      Navigator.pop(context); // Close menu
-                    },
-                    child: Text(currentOptions[index]),
+          child: ListView.builder(
+            itemCount: currentOptions.length,
+            itemBuilder: (context, index) {
+              // If the option is "The story ends", disable the button.
+              bool isFinal = currentOptions[index] == "The story ends";
+              return ListTile(
+                title: ElevatedButton(
+                  onPressed: _isRequestInProgress || isFinal
+                      ? null
+                      : () {
+                    onMenuItemSelected(currentOptions[index]);
+                    Navigator.pop(context); // Close menu
+                  },
+                  child: Text(
+                    isFinal ? "The story ends" : currentOptions[index],
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
         );
       },
     );
   }
 
-  // Calls getNextLeg from StoryService and updates both the story leg and the current options.
   Future<void> getNextStoryLeg(String decision) async {
+    // Prevent multiple submissions until a response is returned.
+    if (_isRequestInProgress) return;
+    setState(() {
+      _isRequestInProgress = true;
+    });
     try {
       final response = await storyService.getNextLeg(decision: decision);
       setState(() {
-        textController.text += "\nNew story leg: ${response["storyLeg"]}\n";
-        // Update the options with the ones returned by the backend.
+        textController.text += "\n\nNew story leg: ${response["storyLeg"]}\n";
+        // Update options from the response.
         currentOptions = List<String>.from(response["options"] ?? []);
       });
+      _scrollToBottom();
     } catch (e) {
       setState(() {
-        textController.text += "\nError calling backend: $e\n";
+        textController.text += "\n\nError calling backend: $e\n";
+      });
+    } finally {
+      setState(() {
+        _isRequestInProgress = false;
       });
     }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Story"),
+        title: Text("Interactive Story"),
         actions: [
           IconButton(
             icon: Icon(Icons.logout),
@@ -113,7 +151,9 @@ class _StoryScreenState extends State<StoryScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Scrollbar(
+                  controller: _scrollController,
                   child: SingleChildScrollView(
+                    controller: _scrollController,
                     child: TextField(
                       controller: textController,
                       maxLines: null,
@@ -127,11 +167,11 @@ class _StoryScreenState extends State<StoryScreen> {
               ),
             ),
             SizedBox(height: 20),
-            // Only show the button menu if there are options.
+            // Show the option button only if there are options.
             currentOptions.isNotEmpty
                 ? ElevatedButton(
-              onPressed: () => showButtonMenu(context),
-              child: Text("Choose an Option"),
+              onPressed: _isRequestInProgress ? null : () => showButtonMenu(context),
+              child: Text("Choose Next Action"),
             )
                 : Container(),
           ],
