@@ -25,6 +25,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   String? selectedSetting;
   String? selectedTone;
 
+  // Option count selection – this tells the backend how many options to generate.
+  int selectedOptionCount = 2;
+
   bool isLoading = false;
 
   @override
@@ -47,7 +50,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   }
 
   // Starts the story by sending full options to the backend.
-  // Here we use a default initial decision "Start Story".
+  // Receives a Map with "storyLeg" and "options", then passes them to StoryScreen.
   void startStory() async {
     if (selectedGenre == null || selectedSetting == null || selectedTone == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -63,16 +66,28 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     try {
       // Use a default initial decision.
       final String initialDecision = "Start Story";
-      final initialLeg = await storyService.startStory(
+      final response = await storyService.startStory(
         decision: initialDecision,
         genre: selectedGenre!,
         setting: selectedSetting!,
         tone: selectedTone!,
         maxLegs: maxLegs,
+        optionCount: selectedOptionCount, // Send the desired option count to the backend.
       );
+      print(response);
+      final String initialLeg = response["storyLeg"];
+      final List<dynamic> initialOptionsDynamic = response["options"];
+      // Convert the dynamic list to List<String>
+      final List<String> initialOptions = List<String>.from(initialOptionsDynamic);
+
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => StoryScreen(initialLeg: initialLeg)),
+        MaterialPageRoute(
+          builder: (context) => StoryScreen(
+            initialLeg: initialLeg,
+            options: initialOptions,
+          ),
+        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -85,7 +100,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     }
   }
 
-  // Helper widget to build dropdown fields.
+  // Helper widget to build dropdown fields for string selections.
   Widget buildDropdownField({
     required String label,
     required List<String> options,
@@ -107,6 +122,31 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           ))
               .toList(),
           onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  // Helper widget for option count (int) selection.
+  Widget buildOptionCountDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Number of Options", style: Theme.of(context).textTheme.titleMedium),
+        DropdownButton<int>(
+          value: selectedOptionCount,
+          isExpanded: true,
+          items: [2, 3, 4]
+              .map((count) => DropdownMenuItem<int>(
+            value: count,
+            child: Text(count.toString()),
+          ))
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              selectedOptionCount = value!;
+            });
+          },
         ),
       ],
     );
@@ -157,6 +197,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                 });
               },
             ),
+            SizedBox(height: 20),
+            // Dropdown for selecting the number of options.
+            buildOptionCountDropdown(),
             SizedBox(height: 40),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

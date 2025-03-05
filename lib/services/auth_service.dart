@@ -58,4 +58,15 @@ class AuthService {
     }
     return null;
   }
+
+  // Password Reset
+  Future<AuthResult> resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return AuthResult(user: null, message: 'Password reset email sent!');
+    } catch (e) {
+      print('Error during password reset: $e');
+      return AuthResult(user: null, message: 'Error: ${e.toString()}');
+    }
+  }
 }

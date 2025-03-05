@@ -5,8 +5,9 @@ import 'login_screen.dart';
 
 class StoryScreen extends StatefulWidget {
   final String? initialLeg;
+  final List<String> options; // Initial options returned by the backend.
 
-  const StoryScreen({Key? key, this.initialLeg}) : super(key: key);
+  const StoryScreen({Key? key, this.initialLeg, required this.options}) : super(key: key);
 
   @override
   _StoryScreenState createState() => _StoryScreenState();
@@ -16,18 +17,17 @@ class _StoryScreenState extends State<StoryScreen> {
   final AuthService authService = AuthService();
   final StoryService storyService = StoryService();
   final TextEditingController textController = TextEditingController();
-  final List<String> menuItems = [
-    "First Option",
-    "Second Option",
-  ];
+
+  // Current options provided by the AI.
+  late List<String> currentOptions;
 
   @override
   void initState() {
     super.initState();
-    // Display the initial story leg if provided.
     if (widget.initialLeg != null) {
       textController.text = widget.initialLeg!;
     }
+    currentOptions = widget.options;
   }
 
   void logout(BuildContext context) async {
@@ -42,7 +42,7 @@ class _StoryScreenState extends State<StoryScreen> {
     setState(() {
       textController.text += "\n$item selected\n";
     });
-    // When a decision is made, call getNextLeg with that decision.
+    // Call backend to get the next story leg using the selected decision.
     getNextStoryLeg(item);
   }
 
@@ -54,15 +54,15 @@ class _StoryScreenState extends State<StoryScreen> {
           height: 250,
           child: Scrollbar(
             child: ListView.builder(
-              itemCount: menuItems.length,
+              itemCount: currentOptions.length,
               itemBuilder: (context, index) {
                 return ListTile(
                   title: ElevatedButton(
                     onPressed: () {
-                      onMenuItemSelected(menuItems[index]);
+                      onMenuItemSelected(currentOptions[index]);
                       Navigator.pop(context); // Close menu
                     },
-                    child: Text(menuItems[index]),
+                    child: Text(currentOptions[index]),
                   ),
                 );
               },
@@ -73,12 +73,14 @@ class _StoryScreenState extends State<StoryScreen> {
     );
   }
 
-  // Calls getNextLeg from StoryService and updates the displayed story.
+  // Calls getNextLeg from StoryService and updates both the story leg and the current options.
   Future<void> getNextStoryLeg(String decision) async {
     try {
-      final newLeg = await storyService.getNextLeg(decision: decision);
+      final response = await storyService.getNextLeg(decision: decision);
       setState(() {
-        textController.text += "\nNew story leg: $newLeg\n";
+        textController.text += "\nNew story leg: ${response["storyLeg"]}\n";
+        // Update the options with the ones returned by the backend.
+        currentOptions = List<String>.from(response["options"] ?? []);
       });
     } catch (e) {
       setState(() {
@@ -125,10 +127,13 @@ class _StoryScreenState extends State<StoryScreen> {
               ),
             ),
             SizedBox(height: 20),
-            ElevatedButton(
+            // Only show the button menu if there are options.
+            currentOptions.isNotEmpty
+                ? ElevatedButton(
               onPressed: () => showButtonMenu(context),
-              child: Text("Open Menu"),
-            ),
+              child: Text("Choose an Option"),
+            )
+                : Container(),
           ],
         ),
       ),

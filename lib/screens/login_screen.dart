@@ -55,6 +55,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: login,
                 child: Text("Login"),
               ),
+              // Password Reset Button
+              TextButton(
+                onPressed: () async {
+                  String email = emailController.text.trim();
+                  if (email.isNotEmpty) {
+                    AuthResult result = await authService.resetPassword(email);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(result.message)),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Please enter your email address to reset your password.")),
+                    );
+                  }
+                },
+                child: Text("Forgot Password?"),
+              ),
               TextButton(
                 onPressed: () {
                   Navigator.push(
