@@ -131,4 +131,33 @@ class StoryService {
       throw Exception("Error: $errorMessage");
     }
   }
+
+  /// Retrieves the currently active story from the backend.
+  /// Expects a JSON payload with keys "initialLeg", "options", and "storyTitle".
+  Future<Map<String, dynamic>?> getActiveStory() async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw Exception("User is not authenticated.");
+    }
+    final url = Uri.parse("$backendUrl/story");
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      print(data);
+      return {
+        "storyLeg": data["initialLeg"] ?? "No story leg returned.",
+        "options": data["options"] ?? [],
+        "storyTitle": data["storyTitle"] ?? "Untitled Story",
+      };
+    } else {
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
+    }
+  }
 }

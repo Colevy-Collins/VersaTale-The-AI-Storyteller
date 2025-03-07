@@ -74,7 +74,6 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         maxLegs: maxLegs,
         optionCount: selectedOptionCount, // Send the desired option count to the backend.
       );
-      print(response);
       final String initialLeg = response["storyLeg"];
       final List<dynamic> initialOptionsDynamic = response["options"];
       // Convert the dynamic list to List<String>
