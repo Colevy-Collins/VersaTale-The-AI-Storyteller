@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:versatale/screens/create_new_story_screen.dart';
-
+import 'package:versatale/screens/view_stories_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -13,14 +13,15 @@ class HomeScreen extends StatelessWidget {
   }
 
   void _navigateToSavedStories(BuildContext context) {
-    // TODO: Navigate to the Saved Stories screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Saved Stories tapped")),
+    // Navigate to the Saved Stories screen.
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ViewStoriesScreen()),
     );
   }
 
   void _navigateToNewStory(BuildContext context) {
-    // Navigate to the CreateNewStoryScreen
+    // Navigate to the CreateNewStoryScreen.
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => CreateNewStoryScreen()),

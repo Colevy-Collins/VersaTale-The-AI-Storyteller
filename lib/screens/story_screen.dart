@@ -6,11 +6,13 @@ import 'login_screen.dart';
 class StoryScreen extends StatefulWidget {
   final String initialLeg;
   final List<String> options; // Initial options returned by the backend.
+  final String storyTitle;
 
   const StoryScreen({
     Key? key,
     required this.initialLeg,
     required this.options,
+    required this.storyTitle,
   }) : super(key: key);
 
   @override
@@ -25,6 +27,8 @@ class _StoryScreenState extends State<StoryScreen> {
 
   late List<String> currentOptions;
   bool _isRequestInProgress = false;
+  // Add a state variable for the story title.
+  String _storyTitle = "Interactive Story";
 
   @override
   void initState() {
@@ -32,6 +36,7 @@ class _StoryScreenState extends State<StoryScreen> {
     // Display the initial story leg and options.
     textController.text = widget.initialLeg;
     currentOptions = widget.options;
+    _storyTitle = widget.storyTitle;
     // Scroll to bottom after initial frame is built.
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
@@ -50,6 +55,19 @@ class _StoryScreenState extends State<StoryScreen> {
     });
     // Call backend for the next story leg using the selected decision.
     getNextStoryLeg(decision);
+  }
+
+  void saveStory() async {
+    try {
+      final response = await storyService.saveStory();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(response["message"] ?? "Story saved successfully.")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error saving story: $e")),
+      );
+    }
   }
 
   void showButtonMenu(BuildContext context) {
@@ -95,6 +113,10 @@ class _StoryScreenState extends State<StoryScreen> {
         textController.text += "\n\nNew story leg: ${response["storyLeg"]}\n";
         // Update options from the response.
         currentOptions = List<String>.from(response["options"] ?? []);
+        // Update the story title if it exists in the response.
+        if (response.containsKey("storyTitle")) {
+          _storyTitle = response["storyTitle"];
+        }
       });
       _scrollToBottom();
     } catch (e) {
@@ -131,7 +153,8 @@ class _StoryScreenState extends State<StoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Interactive Story"),
+        // Use the dynamic story title.
+        title: Text(_storyTitle),
         actions: [
           IconButton(
             icon: Icon(Icons.logout),
@@ -167,16 +190,21 @@ class _StoryScreenState extends State<StoryScreen> {
               ),
             ),
             SizedBox(height: 20),
-            // Show the option button only if there are options.
             currentOptions.isNotEmpty
                 ? ElevatedButton(
               onPressed: _isRequestInProgress ? null : () => showButtonMenu(context),
               child: Text("Choose Next Action"),
             )
                 : Container(),
+            SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: _isRequestInProgress ? null : saveStory,
+              child: Text("Save Story"),
+            ),
           ],
         ),
       ),
     );
   }
 }
+

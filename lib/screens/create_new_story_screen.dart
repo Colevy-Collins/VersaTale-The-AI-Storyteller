@@ -86,6 +86,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           builder: (context) => StoryScreen(
             initialLeg: initialLeg,
             options: initialOptions,
+            storyTitle: response["storyTitle"],
           ),
         ),
       );

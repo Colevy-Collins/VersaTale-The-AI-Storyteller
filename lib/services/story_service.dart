@@ -4,7 +4,7 @@ import 'auth_service.dart';
 
 class StoryService {
   // Replace with your actual backend URL.
-  final String backendUrl = "https://cloud-run-backend-706116508486.us-central1.run.app";
+  final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app";
   final AuthService authService = AuthService();
 
   /// Starts a new story by sending full story options to the backend.
@@ -46,9 +46,12 @@ class StoryService {
       return {
         "storyLeg": data["aiResponse"]["storyLeg"] ?? "No story leg returned.",
         "options": data["aiResponse"]["options"] ?? [],
+        "storyTitle": data["aiResponse"]["storyTitle"] ?? "Untitled Story",
       };
     } else {
-      throw Exception("Backend error: ${response.statusCode}");
+      // Use the error message from the response body if available.
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
     }
   }
 
@@ -79,9 +82,53 @@ class StoryService {
       return {
         "storyLeg": data["aiResponse"]["storyLeg"] ?? "No story leg returned.",
         "options": data["aiResponse"]["options"] ?? [],
+        "storyTitle": data["aiResponse"]["storyTitle"] ?? "Untitled Story",
       };
     } else {
-      throw Exception("Backend error: ${response.statusCode}");
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
+    }
+  }
+
+  /// Sends a request to save the current story to the backend.
+  Future<Map<String, dynamic>> saveStory() async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw Exception("User is not authenticated.");
+    }
+    final url = Uri.parse("$backendUrl/save_story");
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data;
+    } else {
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
+    }
+  }
+
+  Future<List<dynamic>> getSavedStories() async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw Exception("User is not authenticated.");
+    }
+    final url = Uri.parse("$backendUrl/saved_stories");
+    final response = await http.get(url, headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    });
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data["stories"] as List<dynamic>;
+    } else {
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
     }
   }
 }
