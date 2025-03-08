@@ -160,4 +160,87 @@ class StoryService {
       throw Exception("Error: $errorMessage");
     }
   }
+
+  /// Retrieves full details of a saved story by its ID.
+  Future<Map<String, dynamic>> viewStory({required String storyId}) async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw Exception("User is not authenticated.");
+    }
+    final url = Uri.parse("$backendUrl/view_story?storyId=$storyId");
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      print(data);
+      return data;
+    } else {
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
+    }
+  }
+
+  /// Deletes a saved story by its ID.
+  Future<bool> deleteStory({required String storyId}) async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw Exception("User is not authenticated.");
+    }
+    final url = Uri.parse("$backendUrl/delete_story");
+    final payload = jsonEncode({
+      "storyId": "$storyId",
+    });
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: payload,
+    );
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
+    }
+  }
+
+  /// Loads a saved story into active memory on the server using its ID,
+  /// and returns the active story details including the story leg, options, and title.
+  Future<Map<String, dynamic>> continueStory({required String storyId}) async {
+    final token = await authService.getToken();
+    print("storyId: $storyId");
+    if (token == null) {
+      throw Exception("User is not authenticated.");
+    }
+    final url = Uri.parse("$backendUrl/continue_story");
+    final payload = jsonEncode({
+      "storyId": "$storyId",
+    });
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: payload,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {
+        "storyLeg": data["initialLeg"] ?? "No story leg returned.",
+        "options": data["options"] ?? [],
+        "storyTitle": data["storyTitle"] ?? "Untitled Story",
+      };
+    } else {
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      throw Exception("Error: $errorMessage");
+    }
+  }
 }

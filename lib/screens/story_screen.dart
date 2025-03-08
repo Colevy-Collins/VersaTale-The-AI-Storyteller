@@ -108,7 +108,9 @@ class _StoryScreenState extends State<StoryScreen> {
       _isRequestInProgress = true;
     });
     try {
+      print("Calling backend with decision: $decision");
       final response = await storyService.getNextLeg(decision: decision);
+      print("Response from backend: $response");
       setState(() {
         textController.text += "\n\nNew story leg: ${response["storyLeg"]}\n";
         // Update options from the response.

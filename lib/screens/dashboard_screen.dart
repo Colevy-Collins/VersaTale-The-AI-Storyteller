@@ -33,6 +33,7 @@ class HomeScreen extends StatelessWidget {
     final StoryService storyService = StoryService();
     try {
       final activeStory = await storyService.getActiveStory();
+      print(activeStory);
       if (activeStory != null) {
         Navigator.push(
           context,
