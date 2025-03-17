@@ -4,35 +4,42 @@ import 'auth_service.dart';
 
 class StoryService {
   // Replace with your actual backend URL.
-  final String backendUrl = "https://cloud-run-backend-706116508486.us-central1.run.app";
+  final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app";
   final AuthService authService = AuthService();
 
-  /// Starts a new story by sending full story options to the backend.
-  /// Expects a JSON payload with: decision, genre, setting, tone, maxLegs, and optionCount.
+  /// Starts a new story by sending a large JSON payload containing:
+  /// - decision (e.g. "Start Story")
+  /// - dimensions (Map with Dimension 1...17)
+  /// - maxLegs (target story length)
+  /// - optionCount (number of options to generate)
+  ///
   /// Returns a Map containing:
-  /// - "storyLeg": The first generated story leg.
-  /// - "options": A list of options provided by the AI.
+  /// - "storyLeg": The first generated story leg
+  /// - "options": A list of choices provided by the AI
+  /// - "storyTitle": The AI-chosen or system-generated story title
   Future<Map<String, dynamic>> startStory({
     required String decision,
-    required String genre,
-    required String setting,
-    required String tone,
+    required Map<String, dynamic> dimensionData,
     required int maxLegs,
     required int optionCount,
+    required String storyLength,
   }) async {
     final token = await authService.getToken();
     if (token == null) {
       throw Exception("User is not authenticated.");
     }
+
     final url = Uri.parse("$backendUrl/start_story");
+
+    // Construct the JSON payload including all dimensions.
     final payload = jsonEncode({
       "decision": decision,
-      "genre": genre,
-      "setting": setting,
-      "tone": tone,
+      "dimensions": dimensionData,
       "maxLegs": maxLegs,
       "optionCount": optionCount,
+      "storyLength": storyLength,
     });
+
     final response = await http.post(
       url,
       headers: {
@@ -41,6 +48,7 @@ class StoryService {
       },
       body: payload,
     );
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return {
@@ -49,8 +57,8 @@ class StoryService {
         "storyTitle": data["aiResponse"]["storyTitle"] ?? "Untitled Story",
       };
     } else {
-      // Use the error message from the response body if available.
-      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      final errorMessage =
+      response.body.isNotEmpty ? response.body : "Unknown error occurred.";
       throw Exception("Error: $errorMessage");
     }
   }

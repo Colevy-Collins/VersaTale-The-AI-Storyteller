@@ -62,7 +62,7 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // Background image container
+          // Background image container.
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
@@ -72,7 +72,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
-          // Log Out button as an ElevatedButton in the bottom left
+          // Log Out button in the bottom left.
           Positioned(
             bottom: 20,
             left: 16,
@@ -100,58 +100,63 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
-          // Centered content with VersaTale text and button row underneath
+          // Centered content.
           Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Centered VersaTale text with color #597a6f and shadow
-                Text(
-                  "VersaTale",
-                  style: GoogleFonts.atma(
-                    fontSize: 100,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xff3a5a50),
-                    shadows: [
-                      Shadow(
-                        offset: Offset(2.0, 2.0),
-                        blurRadius: 3.0,
-                        color: Colors.black26,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // VersaTale text wrapped in a FittedBox to scale on smaller screens.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "VersaTale",
+                      style: GoogleFonts.atma(
+                        fontSize: 100,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xff3a5a50),
+                        shadows: [
+                          Shadow(
+                            offset: Offset(2.0, 2.0),
+                            blurRadius: 3.0,
+                            color: Colors.black26,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  // Wrap widget to layout buttons responsively.
+                  Wrap(
+                    spacing: 20,
+                    runSpacing: 20,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _buildCircularButton(
+                        context,
+                        "Continue Story",
+                            () => _navigateToSavedStories(context),
+                      ),
+                      _buildCircularButton(
+                        context,
+                        "Start Story",
+                            () => _navigateToNewStory(context),
+                      ),
+                      _buildCircularButton(
+                        context,
+                        "Manage Profile",
+                            () => _navigateToProfile(context),
+                      ),
+                      _buildCircularButton(
+                        context,
+                        "Resume Active Story",
+                            () => _navigateToActiveStory(context),
                       ),
                     ],
                   ),
-                ),
-                SizedBox(height: 40),
-                // Horizontal row of more transparent rectangular buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildCircularButton(
-                      context,
-                      "Continue Story",
-                          () => _navigateToSavedStories(context),
-                    ),
-                    SizedBox(width: 20),
-                    _buildCircularButton(
-                      context,
-                      "Start Story",
-                          () => _navigateToNewStory(context),
-                    ),
-                    SizedBox(width: 20),
-                    _buildCircularButton(
-                      context,
-                      "Manage Profile",
-                          () => _navigateToProfile(context),
-                    ),
-                    SizedBox(width: 20),
-                    _buildCircularButton(
-                      context,
-                      "Resume Active Story",
-                          () => _navigateToActiveStory(context),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import '../services/story_service.dart';
 import 'story_screen.dart';
@@ -57,12 +59,12 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
             ButtonBar(
               alignment: MainAxisAlignment.end,
               children: [
-                // View Story Button: Opens a dialog with story details.
+                // View/Download Story Button: Opens a dialog with story details and download option.
                 ElevatedButton(
                   onPressed: () async {
                     try {
-                      final storyDetails =
-                      await storyService.viewStory(storyId: story["story_ID"]);
+                      final storyDetails = await storyService.viewStory(
+                          storyId: story["story_ID"]);
                       showDialog(
                         context: context,
                         builder: (context) {
@@ -70,14 +72,43 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                             title: Text(storyDetails["storyTitle"] ?? "Story Details"),
                             content: SingleChildScrollView(
                               child: Text(
-                                  storyDetails["initialLeg"] ?? "No story content available."),
+                                storyDetails["initialLeg"] ?? "No story content available.",
+                              ),
                             ),
                             actions: [
+                              // Download Story Button (placed beside the Close button)
+                              ElevatedButton(
+                                onPressed: () {
+                                  try {
+                                    // Reuse view data to generate file content.
+                                    final content = storyDetails["initialLeg"] ??
+                                        "No story content available.";
+                                    final bytes = utf8.encode(content);
+                                    final blob = html.Blob([bytes], 'text/plain');
+                                    final url = html.Url.createObjectUrlFromBlob(blob);
+                                    final anchor = html.document.createElement('a')
+                                    as html.AnchorElement
+                                      ..href = url
+                                      ..download = "story_${story["storyTitle"]}.txt";
+                                    html.document.body?.append(anchor);
+                                    anchor.click();
+                                    anchor.remove();
+                                    html.Url.revokeObjectUrl(url);
+                                  } catch (e) {
+                                    print("Error downloading story: $e");
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text("Error downloading story: $e")),
+                                    );
+                                  }
+                                },
+                                child: const Text("Download Story"),
+                              ),
+                              const SizedBox(width: 16), // Extra space between buttons.
                               TextButton(
                                 onPressed: () {
                                   Navigator.of(context).pop();
                                 },
-                                child: Text("Close"),
+                                child: const Text("Close"),
                               ),
                             ],
                           );
@@ -87,9 +118,9 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                       print("Error viewing story: $e");
                     }
                   },
-                  child: Text("View Story"),
+                  child: const Text("View/Download Story"),
                 ),
-                // Delete Story Button: Calls delete endpoint and refreshes list.
+                // Delete Story Button.
                 ElevatedButton(
                   onPressed: () async {
                     try {
@@ -99,9 +130,9 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                       print("Error deleting story: $e");
                     }
                   },
-                  child: Text("Delete Story"),
+                  child: const Text("Delete Story"),
                 ),
-                // Continue Adventure Button: Loads the saved story into memory and navigates to StoryScreen.
+                // Continue Adventure Button.
                 ElevatedButton(
                   onPressed: () async {
                     try {
@@ -124,7 +155,7 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                       print("Error continuing adventure: $e");
                     }
                   },
-                  child: Text("Continue Adventure"),
+                  child: const Text("Continue Adventure"),
                 ),
               ],
             ),
@@ -138,14 +169,14 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Saved Stories"),
+        title: const Text("Saved Stories"),
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
           ? Center(child: Text("Error: $errorMessage"))
           : stories.isEmpty
-          ? Center(child: Text("No saved stories found."))
+          ? const Center(child: Text("No saved stories found."))
           : RefreshIndicator(
         onRefresh: fetchSavedStories,
         child: ListView.builder(
