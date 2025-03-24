@@ -1,6 +1,6 @@
 /// A map holding all of the dropdown option lists for each Dimension.
 const Map<String, dynamic> dimensionDropdownOptions = {
-  "Dimension 1 - Setting": {
+  "Setting": {
     "1A - Time": [
       "Ancient era with mythic or mystical underpinnings",
       "An unspecified far-future epoch on the brink of collapse",
@@ -65,7 +65,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
       "Relics or runes that spark small-scale miracles"
     ]
   },
-  "Dimension 2 - Genre": [
+  "Genre": [
     "High fantasy with epic scope",
     "Cyberpunk dystopia",
     "Western-influenced fantasy hybrid",
@@ -77,7 +77,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Surreal dream-like narrative",
     "Post-apocalyptic survival drama"
   ],
-  "Dimension 3 - Tone": [
+  "Tone": [
     "Light-hearted and comedic, peppered with jokes",
     "Dark and tragic, emphasizing despair",
     "Philosophical and introspective, exploring deep themes",
@@ -88,7 +88,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Melodramatic and emotionally charged",
     "Cautiously optimistic, focusing on perseverance"
   ],
-  "Dimension 4 - Style": [
+  "Style": [
     "First-person narration with a confessional vibe",
     "Omniscient third-person with cinematic flair",
     "Epistolary format using letters, diaries, or logs",
@@ -99,7 +99,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "A straightforward, documentary-style approach",
     "A hybrid collage of narrative techniques"
   ],
-  "Dimension 5 - Perspective": [
+  "Perspective": [
     "Single, intimate viewpoint of the protagonist",
     "Multiple rotating POVs covering different factions",
     "Unreliable narrator with possible hidden motives",
@@ -108,7 +108,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Retrospective narration from a distant future",
     "Collective perspective from a group or hive-mind"
   ],
-  "Dimension 6 - Difficulty (Encounters & Challenges)": [
+  "Difficulty (Encounters & Challenges)": [
     "Laid-back, easy encounters for casual exploration",
     "Balanced threats that escalate steadily",
     "Punishing environment with frequent, intense danger",
@@ -117,7 +117,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Puzzle-heavy with tactical or intellectual barriers",
     "Encounters that can be bypassed via stealth or diplomacy"
   ],
-  "Dimension 7 - Protagonist Customization": {
+  "Protagonist Customization": {
     "Background": [
       "Orphan raised among nomadic performers",
       "Disgraced noble stripped of titles",
@@ -155,7 +155,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
       "Trusted advisor or confidante to those in power"
     ]
   },
-  "Dimension 8 - Antagonist Development": [
+  "Antagonist Development": [
     "A shadowy mastermind manipulating events behind the scenes",
     "A corrupted former ally consumed by greed or ambition",
     "A primal force of nature indifferent to morality",
@@ -166,7 +166,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "A feared warlord forging alliances through terror",
     "A visionary prophet led astray by forbidden knowledge"
   ],
-  "Dimension 9 - Theme": [
+  "Theme": [
     "Identity and the search for self",
     "Power and the burden of responsibility",
     "The sacrifice required for a greater good",
@@ -177,7 +177,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Fate versus free will",
     "The thin line between reality and illusion"
   ],
-  "Dimension 10 - Encounter Variations": [
+  "Encounter Variations": [
     "Diplomatic standoffs requiring tact and persuasion",
     "High-speed chases across precarious terrain",
     "Epic large-scale battles with multiple factions",
@@ -188,7 +188,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Sudden ambushes by unexpected adversaries",
     "Allied raids on fortified strongholds"
   ],
-  "Dimension 11 - Moral Dilemmas": [
+  "Moral Dilemmas": [
     "Sacrificing one group to save another",
     "Using forbidden power at the risk of corruption",
     "Betraying an ally to serve a larger cause",
@@ -198,7 +198,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Deciding an enemy’s fate: mercy or execution",
     "Accepting or rejecting a morally gray alliance"
   ],
-  "Dimension 12 - Story Pacing": [
+  "Story Pacing": [
     "Rapid, relentless progression with little respite",
     "Slow-burn growth focusing on relationships and depth",
     "Episodic arcs with varying thematic focuses",
@@ -207,7 +207,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Nonlinear timeline with flashbacks and reveals",
     "Chaotic pace reflecting unpredictable events"
   ],
-  "Dimension 13 - Final Objective": [
+  "Final Objective": [
     "Destroying or sealing a world-altering artifact",
     "Overthrowing an oppressive regime",
     "Restoring balance to an ailing ecosystem or realm",
@@ -218,7 +218,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Achieving transcendence to a higher plane",
     "Exposing the true puppet master behind all conflicts"
   ],
-  "Dimension 14 - Consequences of Failure": [
+  "Consequences of Failure": [
     "Complete devastation of a civilization",
     "Permanent corruption twisting the hero or the land",
     "Enslavement under the antagonist’s rule",
@@ -227,7 +227,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Hero’s fall into despair or exile",
     "A time-loop restarting the entire sequence"
   ],
-  "Dimension 15 - Decision Options": [
+  "Decision Options": [
     "Multiple branching paths that reshape the available choices going forward",
     "Subtle shifts in outcomes based on moral or ethical stances",
     "Alignment tracking that influences future interactions and opportunities",
@@ -236,7 +236,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "Random or chance-based event triggers adding variability to each playthrough",
     "Return visits to earlier nodes, where prior choices may now have different results"
   ],
-  "Dimension 16 - Puzzle & Final Challenge": [
+  "Puzzle & Final Challenge": [
     "A sequence-based logic puzzle where each turn allows you to input a guess for the next number or symbol in a hidden pattern. Correct completion triggers the good ending, while repeated errors lead to a fail ending.",
     "A grid alignment challenge: on each turn, you must reposition pieces to match a specific configuration. Achieving the correct layout unlocks the good ending; failing to align them properly results in the fail ending.",
     "A deduction-based puzzle in which each turn reveals a clue about the correct combination of items or moves. Identifying the full set correctly grants the good ending; inaccuracies accumulate into a fail ending.",
@@ -246,7 +246,7 @@ const Map<String, dynamic> dimensionDropdownOptions = {
     "A branching-path decision maze where each turn offers multiple routes. Choosing a consistent path with correct logic yields the good ending, but straying into dead-ends accumulates errors, concluding in a fail ending.",
     "A turn-based combat encounter where each round offers offensive and defensive moves. Successfully depleting the enemy’s health while managing your own leads to the good ending; failing to balance attacks and defenses results in the fail ending."
   ],
-  "Dimension 17 - Fail States": [
+  "Fail States": [
     "A growing burden of guilt that steadily erodes resolve, each misstep pushing the hero closer to a tragic breakdown.",
     "Allies becoming disillusioned or turning hostile, leading to isolation and a near-inevitable downfall if trust isn’t rebuilt.",
     "A spiraling series of compromises where each wrong decision darkens the hero’s path, eventually locking them into a catastrophic finale.",

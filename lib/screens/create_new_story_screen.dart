@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart'; // Ensure google_fonts is added to pubspec.yaml
 
 // 1) Import your dimension map and dropdown widget
 import '../services/dimension_map.dart';
@@ -17,7 +18,6 @@ class CreateNewStoryScreen extends StatefulWidget {
 class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   final StoryService storyService = StoryService();
   final int maxLegs = 10;
-
   bool isLoading = false;
 
   // The user can set how many options appear at each decision point
@@ -26,7 +26,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   // "Story Length" selection (Short, Medium, Long, etc.)
   String selectedStoryLength = "Short";
 
-  // userSelections[dimensionKey or "dimKey | subKey"] = user’s choice or null
+  // userSelections[dimensionKey or "dimKey | subKey"] = user's choice or null
   final Map<String, String?> userSelections = {};
 
   // For controlling which dimension’s expansion tile is open
@@ -35,7 +35,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize expansionState so everything is collapsed
+    // Initialize expansionState so that all dimensions are collapsed.
     dimensionDropdownOptions.forEach((dimKey, dimValue) {
       expansionState[dimKey] = false;
     });
@@ -44,7 +44,6 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   // ----------------------------------
   //  Random picking
   // ----------------------------------
-
   String resolveRandom(String? userChoice, List<String> options) {
     if (userChoice == null || userChoice == "Random") {
       return pickRandomFromList(options);
@@ -61,14 +60,14 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   // ----------------------------------
   //  Build final dimension data
   // ----------------------------------
-
   Map<String, dynamic> buildDimensionSelectionData() {
     final data = <String, dynamic>{};
 
     dimensionDropdownOptions.forEach((dimKey, dimValue) {
       if (dimValue is List) {
         final userChoice = userSelections[dimKey];
-        final finalPick = resolveRandom(userChoice, List<String>.from(dimValue));
+        final finalPick =
+        resolveRandom(userChoice, List<String>.from(dimValue));
         data[dimKey] = finalPick;
       } else if (dimValue is Map<String, dynamic>) {
         final subData = <String, dynamic>{};
@@ -76,7 +75,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           if (subValue is List) {
             final mapKey = "$dimKey | $subKey";
             final subUserChoice = userSelections[mapKey];
-            final finalPick = resolveRandom(subUserChoice, List<String>.from(subValue));
+            final finalPick =
+            resolveRandom(subUserChoice, List<String>.from(subValue));
             subData[subKey] = finalPick;
           }
         });
@@ -84,10 +84,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       }
     });
 
-    // Also attach the user’s chosen number of options
+    // Also attach the user's chosen number of options and story length.
     data["optionCount"] = selectedOptionCount;
-
-    // Attach the user’s selected story length
     data["storyLength"] = selectedStoryLength;
 
     return data;
@@ -96,13 +94,12 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   // ----------------------------------
   //  Start story
   // ----------------------------------
-
   void startStory() async {
     setState(() => isLoading = true);
 
     try {
       final selectionData = buildDimensionSelectionData();
-      final String initialDecision = "Start Story";
+      const String initialDecision = "Start Story";
 
       final response = await storyService.startStory(
         decision: initialDecision,
@@ -114,9 +111,10 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
       final String initialLeg = response["storyLeg"];
       final List<dynamic> initialOptionsDynamic = response["options"];
-      final List<String> initialOptions = List<String>.from(initialOptionsDynamic);
+      final List<String> initialOptions =
+      List<String>.from(initialOptionsDynamic);
 
-      // Navigate to the next screen
+      // Navigate to the next screen.
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -129,7 +127,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        SnackBar(
+          content: Text("Error: $e", style: GoogleFonts.atma()),
+        ),
       );
     } finally {
       setState(() => isLoading = false);
@@ -139,59 +139,189 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   // ----------------------------------
   //  Building the UI
   // ----------------------------------
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Create New Story")),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Possibly show instructions at the top
-          Text(
-            "Select only the dimensions you care about.\n"
-                "Everything else will be randomized!",
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
+    // List of dimension keys to exclude from the UI.
+    final List<String> excludedDimensions = [
+      "Decision Options",
+      "Fail States",
+      "Puzzle & Final Challenge",
+      "Final Objective",
+      "Protagonist Customization",
+      "Moral Dilemmas",
+      "Consequences of Failure"
+    ];
 
-          // One expansion tile per dimension
-          ...dimensionDropdownOptions.entries.map((entry) {
-            final dimKey = entry.key;
-            final dimValue = entry.value;
-            return _buildDimensionExpansionTile(dimKey, dimValue);
-          }).toList(),
-          const SizedBox(height: 20),
-
-          // Option count
-          Text("Number of Options:", style: Theme.of(context).textTheme.titleMedium),
-          _buildOptionCountDropdown(),
-          const SizedBox(height: 20),
-
-          // Story length
-          Text("Story Length:", style: Theme.of(context).textTheme.titleMedium),
-          _buildStoryLengthDropdown(),
-          const SizedBox(height: 30),
-
-          // Start Story button
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              onPressed: startStory,
-              child: const Text("Start Story"),
+    // Build a list of Widgets for dimensions, skipping any keys in the exclusion list.
+    List<Widget> dimensionWidgets = [];
+    for (var entry in dimensionDropdownOptions.entries) {
+      if (excludedDimensions.contains(entry.key)) continue;
+      dimensionWidgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Card(
+                color: const Color(0xFFE7E6D9),
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _buildDimensionExpansionTile(entry.key, entry.value),
+              ),
             ),
           ),
-        ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      // Background set to deep green (#527D4D)
+      backgroundColor: const Color(0xFFC27b31),
+      body: SafeArea(
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Custom back arrow.
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  color: Colors.white,
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Primary heading in cursive (bold).
+            Center(
+              child: Text(
+                "Create your new adventure",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.atma(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Instruction subtitle in cursive (bold).
+            Center(
+              child: Text(
+                "Please select which dimensions matter to you.\nAny dimensions left unselected will be randomized.",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.atma(
+                  fontSize: 18,
+                  color: Colors.white70,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Add dimension widgets built by the for loop.
+            ...dimensionWidgets,
+            const SizedBox(height: 20),
+            // Option count wrapped in a Card.
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12.0),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: Card(
+                    color: const Color(0xFFE7E6D9),
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Number of Options:",
+                            style: GoogleFonts.atma(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildOptionCountDropdown(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Story length wrapped in a Card.
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12.0),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: Card(
+                    color: const Color(0xFFE7E6D9),
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Story Length:",
+                            style: GoogleFonts.atma(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildStoryLengthDropdown(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // Floating action button fixed at bottom right.
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: startStory,
+        label: Text(
+          "Start Story",
+          style: GoogleFonts.atma(
+            color: Colors.black87,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: const Color(0xFFE7E6D9),
       ),
     );
   }
 
   Widget _buildDimensionExpansionTile(String dimKey, dynamic dimValue) {
     return ExpansionTile(
-      key: PageStorageKey<String>(dimKey), // ensures stable expansion state
-      title: Text(dimKey),
+      key: PageStorageKey<String>(dimKey), // Ensures stable expansion state.
+      title: Text(
+        dimKey,
+        style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+      ),
       initiallyExpanded: expansionState[dimKey] ?? false,
       onExpansionChanged: (expanded) {
         setState(() {
@@ -207,7 +337,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     );
   }
 
-  // Build the actual dropdown(s) inside the expanded area
+  // Build the dropdown(s) inside the expansion tile.
   Widget _buildDimensionContent(String dimKey, dynamic dimValue) {
     if (dimValue is List) {
       return DimensionDropdown(
@@ -252,7 +382,10 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       items: [2, 3, 4].map((count) {
         return DropdownMenuItem<int>(
           value: count,
-          child: Text(count.toString()),
+          child: Text(
+            count.toString(),
+            style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+          ),
         );
       }).toList(),
       onChanged: (value) {
@@ -260,21 +393,23 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           selectedOptionCount = value!;
         });
       },
+      style: GoogleFonts.atma(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
     );
   }
 
-  // New dropdown for Story Length
+  // New dropdown for Story Length.
   Widget _buildStoryLengthDropdown() {
-    // Example choices for length
     final lengthOptions = ["Short", "Medium", "Long"];
-
     return DropdownButton<String>(
       value: selectedStoryLength,
       isExpanded: true,
       items: lengthOptions.map((length) {
         return DropdownMenuItem<String>(
           value: length,
-          child: Text(length),
+          child: Text(
+            length,
+            style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+          ),
         );
       }).toList(),
       onChanged: (value) {
@@ -282,6 +417,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           selectedStoryLength = value!;
         });
       },
+      style: GoogleFonts.atma(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
     );
   }
 }

@@ -11,7 +11,12 @@ class HomeScreen extends StatelessWidget {
 
   void _navigateToProfile(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Manage Profile tapped")),
+      SnackBar(
+        content: Text(
+          "Manage Profile tapped",
+          style: GoogleFonts.atma(),
+        ),
+      ),
     );
   }
 
@@ -47,12 +52,20 @@ class HomeScreen extends StatelessWidget {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No active story found.")),
+          SnackBar(
+            content: Text(
+              "No active story found.",
+              style: GoogleFonts.atma(),
+            ),
+          ),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error resuming active story: $e")),
+        SnackBar(
+          content: Text("Error resuming active story: $e",
+              style: GoogleFonts.atma()),
+        ),
       );
     }
   }
@@ -60,13 +73,14 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Background image container.
       body: Stack(
         children: [
-          // Background image container.
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage("assets/versatale_dashboard2_image.png"),
+                image:
+                AssetImage("assets/versatale_dashboard2_image.png"),
                 alignment: Alignment(-0.8, 0.0),
                 fit: BoxFit.cover,
               ),
@@ -81,13 +95,15 @@ class HomeScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                backgroundColor: Colors.white.withOpacity(0.5),
+                padding:
+                EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                backgroundColor: Colors.white.withOpacity(0.7),
               ),
               onPressed: () {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => LoginScreen()),
+                  MaterialPageRoute(
+                      builder: (context) => LoginScreen()),
                 );
               },
               child: Text(
@@ -95,7 +111,7 @@ class HomeScreen extends StatelessWidget {
                 style: GoogleFonts.atma(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  color: const Color(0xFF453E2C),
                 ),
               ),
             ),
@@ -103,11 +119,12 @@ class HomeScreen extends StatelessWidget {
           // Centered content.
           Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // VersaTale text wrapped in a FittedBox to scale on smaller screens.
+                  // VersaTale text rendered with an outlined effect.
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
@@ -115,7 +132,10 @@ class HomeScreen extends StatelessWidget {
                       style: GoogleFonts.atma(
                         fontSize: 100,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xff3a5a50),
+                        foreground: Paint()
+                          ..style = PaintingStyle.stroke
+                          ..strokeWidth = 2
+                          ..color = Colors.white,
                         shadows: [
                           Shadow(
                             offset: Offset(2.0, 2.0),
@@ -127,7 +147,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  // Wrap widget to layout buttons responsively.
+                  // Wrap widget for responsive layout of buttons.
                   Wrap(
                     spacing: 20,
                     runSpacing: 20,
@@ -135,7 +155,7 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       _buildCircularButton(
                         context,
-                        "Continue Story",
+                        "Story Archives",
                             () => _navigateToSavedStories(context),
                       ),
                       _buildCircularButton(
@@ -150,7 +170,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                       _buildCircularButton(
                         context,
-                        "Resume Active Story",
+                        "Continue Story",
                             () => _navigateToActiveStory(context),
                       ),
                     ],
@@ -164,22 +184,24 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCircularButton(BuildContext context, String label, VoidCallback onPressed) {
+  Widget _buildCircularButton(BuildContext context, String label,
+      VoidCallback onPressed) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        padding: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-        backgroundColor: Colors.white.withOpacity(0.5),
+        padding:
+        EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+        backgroundColor: Colors.white.withOpacity(0.7),
       ),
       onPressed: onPressed,
       child: Text(
         label,
         style: GoogleFonts.atma(
           fontSize: 18,
-          color: Colors.black,
           fontWeight: FontWeight.bold,
+          color: const Color(0xFF453E2C),
         ),
       ),
     );
