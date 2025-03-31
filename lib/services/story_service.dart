@@ -4,19 +4,9 @@ import 'auth_service.dart';
 
 class StoryService {
   // Replace with your actual backend URL.
-  final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app";
+  final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";
   final AuthService authService = AuthService();
 
-  /// Starts a new story by sending a large JSON payload containing:
-  /// - decision (e.g. "Start Story")
-  /// - dimensions (Map with Dimension 1...17)
-  /// - maxLegs (target story length)
-  /// - optionCount (number of options to generate)
-  ///
-  /// Returns a Map containing:
-  /// - "storyLeg": The first generated story leg
-  /// - "options": A list of choices provided by the AI
-  /// - "storyTitle": The AI-chosen or system-generated story title
   Future<Map<String, dynamic>> startStory({
     required String decision,
     required Map<String, dynamic> dimensionData,

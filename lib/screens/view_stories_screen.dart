@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:html' as html;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // For date formatting
 import '../services/story_service.dart';
 import 'story_screen.dart';
 
@@ -44,22 +45,51 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
     }
   }
 
+  /// Formats the raw time string to a human-friendly format.
+  /// If parsing fails, returns the raw string.
+  String _formatTime(String rawTime) {
+    try {
+      DateTime dateTime = DateTime.parse(rawTime);
+      // Example format: Jan 1, 2023 5:30 PM
+      return DateFormat.yMMMd().add_jm().format(dateTime);
+    } catch (e) {
+      return rawTime;
+    }
+  }
+
   Widget buildStoryItem(Map<String, dynamic> story) {
     String storyTitle = story["storyTitle"] ?? "Untitled Story";
+    // Format the time using _formatTime()
+    String rawTime = story["lastActivity"] ?? "Unknown";
+    String formattedTime = rawTime != "Unknown" ? _formatTime(rawTime) : rawTime;
+
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      elevation: 4,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ListTile(
-              title: Text(storyTitle),
-              subtitle: Text(story["lastActivity"] ?? "Unknown"),
+              title: Text(
+                storyTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                formattedTime,
+                style: const TextStyle(color: Colors.grey),
+              ),
             ),
-            ButtonBar(
-              alignment: MainAxisAlignment.end,
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
               children: [
-                // View/Download Story Button: Opens a dialog with story details and download option.
                 ElevatedButton(
                   onPressed: () async {
                     try {
@@ -76,11 +106,9 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                               ),
                             ),
                             actions: [
-                              // Download Story Button (placed beside the Close button)
                               ElevatedButton(
                                 onPressed: () {
                                   try {
-                                    // Reuse view data to generate file content.
                                     final content = storyDetails["initialLeg"] ??
                                         "No story content available.";
                                     final bytes = utf8.encode(content);
@@ -103,7 +131,7 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                                 },
                                 child: const Text("Download Story"),
                               ),
-                              const SizedBox(width: 16), // Extra space between buttons.
+                              const SizedBox(width: 8),
                               TextButton(
                                 onPressed: () {
                                   Navigator.of(context).pop();
@@ -116,11 +144,13 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                       );
                     } catch (e) {
                       print("Error viewing story: $e");
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Error viewing story: $e")),
+                      );
                     }
                   },
-                  child: const Text("View/Download Story"),
+                  child: Text("View/Download Story"),
                 ),
-                // Delete Story Button.
                 ElevatedButton(
                   onPressed: () async {
                     try {
@@ -128,11 +158,13 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                       fetchSavedStories();
                     } catch (e) {
                       print("Error deleting story: $e");
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Error deleting story: $e")),
+                      );
                     }
                   },
-                  child: const Text("Delete Story"),
+                  child: Text("Delete Story"),
                 ),
-                // Continue Adventure Button.
                 ElevatedButton(
                   onPressed: () async {
                     try {
@@ -153,9 +185,12 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                       );
                     } catch (e) {
                       print("Error continuing adventure: $e");
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Error continuing adventure: $e")),
+                      );
                     }
                   },
-                  child: const Text("Continue Adventure"),
+                  child: Text("Continue Adventure"),
                 ),
               ],
             ),
@@ -169,12 +204,15 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Saved Stories"),
+        title: Text(
+          "Saved Stories",
+          style: TextStyle(fontSize: 18),
+        ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
-          ? Center(child: Text("Error: $errorMessage"))
+          ? Center(child: Text("Error: $errorMessage", style: TextStyle(fontSize: 16)))
           : stories.isEmpty
           ? const Center(child: Text("No saved stories found."))
           : RefreshIndicator(

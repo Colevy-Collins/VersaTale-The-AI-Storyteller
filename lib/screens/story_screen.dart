@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import '../services/story_service.dart';
-import 'login_screen.dart';
+import 'main_splash_screen.dart';
+
+// Define menu options, including a close menu option.
+enum _MenuOption { backToScreen, previousLeg, viewFullStory, saveStory, logout, closeMenu }
 
 class StoryScreen extends StatefulWidget {
   final String initialLeg;
-  final List<String> options; // Initial options from the backend.
+  final List<String> options;
   final String storyTitle;
 
   const StoryScreen({
@@ -23,16 +26,10 @@ class StoryScreen extends StatefulWidget {
 class _StoryScreenState extends State<StoryScreen> {
   final AuthService authService = AuthService();
   final StoryService storyService = StoryService();
-
-  // Controller for the story text
   final TextEditingController textController = TextEditingController();
-
-  // Controller for the Scrollbar + SingleChildScrollView
   final ScrollController _scrollController = ScrollController();
 
-  // The current set of options from the backend
   late List<String> currentOptions;
-
   bool _isRequestInProgress = false;
   String _storyTitle = "Interactive Story";
 
@@ -42,12 +39,10 @@ class _StoryScreenState extends State<StoryScreen> {
     textController.text = widget.initialLeg;
     currentOptions = widget.options;
     _storyTitle = widget.storyTitle;
-
-    // Once the layout is built, auto-scroll to bottom (if multiple lines of text)
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
-  /// Shows a confirmation dialog before going "Back."
+  /// Shows a confirmation dialog before reverting to the previous leg.
   void _confirmAndGoBack() async {
     final result = await showDialog<bool>(
       context: context,
@@ -71,30 +66,51 @@ class _StoryScreenState extends State<StoryScreen> {
         );
       },
     );
-
     if (result == true) {
       getPreviousStoryLeg();
     }
   }
 
-  /// Logs out the user and navigates back to the login screen.
+  /// Logs out the user and navigates to the splash screen.
   void logout(BuildContext context) async {
     await authService.signOut();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
+      MaterialPageRoute(builder: (context) => MainSplashScreen()),
     );
   }
 
-  /// Called when the user selects an option to generate the next leg of the story.
-  void onMenuItemSelected(String decision) async {
+  /// Dispatches actions based on the selected menu option.
+  void onMenuItemSelected(_MenuOption option) {
+    switch (option) {
+      case _MenuOption.backToScreen:
+        Navigator.of(context).pop();
+        break;
+      case _MenuOption.previousLeg:
+        _confirmAndGoBack();
+        break;
+      case _MenuOption.viewFullStory:
+        viewFullStoryDialog(context);
+        break;
+      case _MenuOption.saveStory:
+        saveStory();
+        break;
+      case _MenuOption.logout:
+        logout(context);
+        break;
+      case _MenuOption.closeMenu:
+      // Close menu automatically when an item is selected; no further action needed.
+        break;
+    }
+  }
+
+  /// Called when a next action option is selected.
+  void onMenuItemSelectedNext(String decision) async {
     setState(() => _isRequestInProgress = true);
     try {
       final response = await storyService.getNextLeg(decision: decision);
-
       textController.text = response["storyLeg"] ?? "No story leg returned.";
       currentOptions = List<String>.from(response["options"] ?? []);
-
       if (response.containsKey("storyTitle")) {
         _storyTitle = response["storyTitle"];
       }
@@ -106,52 +122,12 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  /// Shows a bottom sheet with the current options.
-  void showButtonMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return Container(
-          height: 250,
-          child: ListView.builder(
-            itemCount: currentOptions.length,
-            itemBuilder: (context, index) {
-              bool isFinal = currentOptions[index] == "The story ends";
-              return ListTile(
-                title: ElevatedButton(
-                  onPressed: _isRequestInProgress || isFinal
-                      ? null
-                      : () {
-                    onMenuItemSelected(currentOptions[index]);
-                    Navigator.pop(context); // close the bottom sheet
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFC27B31),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    isFinal ? "The story ends" : currentOptions[index],
-                    style: GoogleFonts.atma(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  /// Fetch the "full story so far" from the backend and display it in a dialog.
+  /// Displays the full story in a dialog.
   void viewFullStoryDialog(BuildContext context) async {
     try {
       final response = await storyService.getFullStory();
-      final String fullStory = response["initialLeg"] ?? "";
+      final String fullStory = response["storyLeg"] ?? "";
       final List<String> dialogOptions = List<String>.from(response["options"] ?? []);
-
       showDialog(
         context: context,
         builder: (context) {
@@ -159,8 +135,8 @@ class _StoryScreenState extends State<StoryScreen> {
             fullStory: fullStory,
             dialogOptions: dialogOptions,
             onOptionSelected: (option) {
-              Navigator.of(context).pop(); // close the dialog
-              onMenuItemSelected(option);   // fetch next leg
+              Navigator.of(context).pop();
+              onMenuItemSelectedNext(option);
             },
           );
         },
@@ -172,18 +148,14 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  /// Reverts the story to the previous leg (called only after user confirms).
+  /// Retrieves the previous story leg.
   void getPreviousStoryLeg() async {
     if (_isRequestInProgress) return;
-
     setState(() => _isRequestInProgress = true);
-
     try {
       final response = await storyService.getPreviousLeg();
-
       textController.text = response["storyLeg"] ?? "No story leg returned.";
       currentOptions = List<String>.from(response["options"] ?? []);
-
       if (response.containsKey("storyTitle")) {
         _storyTitle = response["storyTitle"];
       }
@@ -195,7 +167,7 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  /// Saves the current story on the server.
+  /// Saves the current story.
   void saveStory() async {
     try {
       final response = await storyService.saveStory();
@@ -209,20 +181,18 @@ class _StoryScreenState extends State<StoryScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error saving story: $e", style: GoogleFonts.atma()),
-        ),
+        SnackBar(content: Text("Error saving story: $e", style: GoogleFonts.atma())),
       );
     }
   }
 
-  /// Auto-scroll to the bottom of the text field
+  /// Auto-scrolls to the bottom of the story text.
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 500),
+          duration: const Duration(milliseconds: 500),
           curve: Curves.easeOut,
         );
       }
@@ -238,125 +208,104 @@ class _StoryScreenState extends State<StoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Use an AppBar with no default back arrow; title in a FittedBox for dynamic sizing.
     return Scaffold(
-      // We still use a large toolbarHeight
-      // But we wrap our content in a FittedBox, so it shrinks if needed.
       appBar: AppBar(
-        automaticallyImplyLeading: true,
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.white.withOpacity(0.7),
+        elevation: 8,
         centerTitle: true,
-        toolbarHeight: 120,
         title: FittedBox(
           fit: BoxFit.scaleDown,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _storyTitle,
-                  style: GoogleFonts.atma(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    // Back button (with confirmation)
-                    TextButton(
-                      onPressed: _isRequestInProgress ? null : _confirmAndGoBack,
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.blueGrey,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        "Back",
-                        style: GoogleFonts.atma(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    // View Full Story
-                    TextButton(
-                      onPressed: () => viewFullStoryDialog(context),
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        "View Full Story",
-                        style: GoogleFonts.atma(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    // Save Story
-                    TextButton(
-                      onPressed: saveStory,
-                      style: TextButton.styleFrom(
-                        backgroundColor: const Color(0xFFC27B31),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        "Save Story",
-                        style: GoogleFonts.atma(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    // Logout icon
-                    Container(
-                      width: 50,
-                      height: 40,
-                      child: IconButton(
-                        icon: Icon(Icons.logout),
-                        color: Colors.white,
-                        onPressed: () => logout(context),
-                        tooltip: "Logout",
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+          child: Text(
+            _storyTitle,
+            style: GoogleFonts.atma(
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
             ),
           ),
         ),
+        actions: [
+          PopupMenuButton<_MenuOption>(
+            icon: const Icon(Icons.menu, color: Colors.black),
+            onSelected: onMenuItemSelected,
+            itemBuilder: (context) => <PopupMenuEntry<_MenuOption>>[
+              PopupMenuItem<_MenuOption>(
+                value: _MenuOption.backToScreen,
+                child: Row(
+                  children: [
+                    const Icon(Icons.arrow_back_ios, color: Colors.black),
+                    const SizedBox(width: 8),
+                    Text("Back a Screen", style: GoogleFonts.atma()),
+                  ],
+                ),
+              ),
+              PopupMenuItem<_MenuOption>(
+                value: _MenuOption.previousLeg,
+                child: Row(
+                  children: [
+                    const Icon(Icons.arrow_back, color: Colors.black),
+                    const SizedBox(width: 8),
+                    Text("Previous Leg", style: GoogleFonts.atma()),
+                  ],
+                ),
+              ),
+              PopupMenuItem<_MenuOption>(
+                value: _MenuOption.viewFullStory,
+                child: Row(
+                  children: [
+                    const Icon(Icons.visibility, color: Colors.black),
+                    const SizedBox(width: 8),
+                    Text("View Full Story", style: GoogleFonts.atma()),
+                  ],
+                ),
+              ),
+              PopupMenuItem<_MenuOption>(
+                value: _MenuOption.saveStory,
+                child: Row(
+                  children: [
+                    const Icon(Icons.save, color: Colors.black),
+                    const SizedBox(width: 8),
+                    Text("Save Story", style: GoogleFonts.atma()),
+                  ],
+                ),
+              ),
+              PopupMenuItem<_MenuOption>(
+                value: _MenuOption.logout,
+                child: Row(
+                  children: [
+                    const Icon(Icons.logout, color: Colors.black),
+                    const SizedBox(width: 8),
+                    Text("Logout", style: GoogleFonts.atma()),
+                  ],
+                ),
+              ),
+              PopupMenuItem<_MenuOption>(
+                value: _MenuOption.closeMenu,
+                child: Row(
+                  children: [
+                    const Icon(Icons.close, color: Colors.black),
+                    const SizedBox(width: 8),
+                    Text("Close Menu", style: GoogleFonts.atma()),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           return Center(
-            // Constrain the max width for desktops, allow full width on smaller devices
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 800, // adjust as needed
-              ),
+              constraints: const BoxConstraints(maxWidth: 800),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
-                  // The text area expands in the remaining space
                   children: [
                     Expanded(
                       child: Container(
-                        padding: EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey),
                           borderRadius: BorderRadius.circular(8),
@@ -379,11 +328,9 @@ class _StoryScreenState extends State<StoryScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // Show the "Choose Next Action" button only if options exist
                     if (currentOptions.isNotEmpty)
                       ElevatedButton(
-                        onPressed:
-                        _isRequestInProgress ? null : () => showButtonMenu(context),
+                        onPressed: _isRequestInProgress ? null : () => showButtonMenu(context),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFC27B31),
                           foregroundColor: Colors.white,
@@ -405,9 +352,48 @@ class _StoryScreenState extends State<StoryScreen> {
       ),
     );
   }
+
+  /// Displays a bottom sheet with the current options.
+  void showButtonMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          height: 250,
+          child: ListView.builder(
+            itemCount: currentOptions.length,
+            itemBuilder: (context, index) {
+              bool isFinal = currentOptions[index] == "The story ends";
+              return ListTile(
+                title: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC27B31),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: _isRequestInProgress || isFinal
+                      ? null
+                      : () {
+                    onMenuItemSelectedNext(currentOptions[index]);
+                    Navigator.pop(context); // close bottom sheet
+                  },
+                  child: Text(
+                    isFinal ? "The story ends" : currentOptions[index],
+                    style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
-/// Simple dialog widget to display the full story and the current options
+/// Dialog widget for displaying the full story and current options.
 class FullStoryDialog extends StatelessWidget {
   final String fullStory;
   final List<String> dialogOptions;
@@ -455,7 +441,7 @@ class FullStoryDialog extends StatelessWidget {
                                     ? null
                                     : () {
                                   onOptionSelected(dialogOptions[index]);
-                                  Navigator.pop(context); // close bottom sheet
+                                  Navigator.pop(context);
                                 },
                                 child: Text(
                                   isFinal ? "The story ends" : dialogOptions[index],
@@ -490,7 +476,7 @@ class FullStoryDialog extends StatelessWidget {
   }
 }
 
-/// Helper function to show backend errors in a dialog
+/// Helper function to display backend errors in a dialog.
 void showErrorDialog(BuildContext context, String message) {
   showDialog(
     context: context,

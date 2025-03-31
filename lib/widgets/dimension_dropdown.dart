@@ -1,61 +1,72 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
+import 'package:google_fonts/google_fonts.dart';
 
-class DimensionDropdown extends StatefulWidget {
-  final String label;                 // e.g. "Dimension 2 - Genre"
-  final List<String> options;        // the list of possible choices
-  final String? initialValue;        // currently-selected value, if any
+class DimensionDropdown extends StatelessWidget {
+  final String label;
+  final List<String> options;
+  final String? initialValue;
   final ValueChanged<String?> onChanged;
+  final TextStyle? textStyle;
 
   const DimensionDropdown({
     Key? key,
     required this.label,
     required this.options,
-    this.initialValue,
+    required this.initialValue,
     required this.onChanged,
+    this.textStyle,
   }) : super(key: key);
 
   @override
-  _DimensionDropdownState createState() => _DimensionDropdownState();
-}
-
-class _DimensionDropdownState extends State<DimensionDropdown> {
-  String? _selectedValue;
-
-  @override
-  void initState() {
-    super.initState();
-    // If there's an initial value, use it; otherwise default to null.
-    _selectedValue = widget.initialValue;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // Combine the original list with a "Random" entry.
-    // You can insert "Random" at the start or end, whichever you prefer.
-    final allOptions = [...widget.options];
-    allOptions.insert(0, "Random");
+    // Build dropdown items: each option wrapped in a Container that expands in height as needed.
+    List<DropdownMenuItem<String>> items = options.map((option) {
+      return DropdownMenuItem<String>(
+        value: option,
+        child: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            option,
+            style: textStyle ?? GoogleFonts.atma(),
+            softWrap: true,
+          ),
+        ),
+      );
+    }).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label, style: Theme.of(context).textTheme.titleMedium),
-        DropdownButton<String>(
-          value: _selectedValue,
-          hint: Text("Select ${widget.label}"),
-          isExpanded: true,
-          items: allOptions.map((option) {
-            return DropdownMenuItem<String>(
-              value: option,
-              child: Text(option),
-            );
-          }).toList(),
-          onChanged: (val) {
-            setState(() {
-              _selectedValue = val;
-            });
-            widget.onChanged(val);
-          },
+        // Label for the dropdown
+        Text(
+          label,
+          style: (textStyle ?? GoogleFonts.atma()).copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Dropdown field wrapped in a Container with its own border and padding.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade600),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: DropdownButton<String>(
+            value: initialValue,
+            isExpanded: true,
+            itemHeight: null, // Allows items to expand in height as needed.
+            underline: const SizedBox(), // Remove default underline.
+            items: items,
+            onChanged: onChanged,
+            style: textStyle ?? GoogleFonts.atma(),
+          ),
         ),
       ],
     );

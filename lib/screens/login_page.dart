@@ -1,27 +1,21 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
-// Adjust these imports for your project.
 import '../services/auth_service.dart';
-import 'dashboard_screen.dart'; // or wherever HomeScreen is
+import 'dashboard_screen.dart';
+import 'forgot_password_page.dart';
 
-class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+class LoginPage extends StatefulWidget {
+  const LoginPage({Key? key}) : super(key: key);
 
   @override
-  _RegisterScreenState createState() => _RegisterScreenState();
+  _LoginPageState createState() => _LoginPageState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _LoginPageState extends State<LoginPage> {
+  final AuthService authService = AuthService();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final AuthService authService = AuthService();
 
-  /// Helper to show color-coded SnackBars:
-  ///  - [isError] => red background
-  ///  - [isSuccess] => green background
-  ///  - otherwise => blue background (info)
   void _showMessage(String message, {bool isError = false, bool isSuccess = false}) {
     Color bgColor;
     if (isError) {
@@ -41,19 +35,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Future<void> register() async {
+  Future<void> _login() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
-    // Basic validation
     if (email.isEmpty || password.isEmpty) {
       _showMessage("Please enter both email and password.", isError: true);
       return;
     }
 
-    final result = await authService.signUp(email, password);
+    final result = await authService.signIn(email, password);
+
     if (result.user != null) {
-      _showMessage("Registration successful!", isSuccess: true);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -65,20 +58,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // We'll use LayoutBuilder to compute responsive text sizes
     return Scaffold(
+      // No MaterialApp here
       body: SafeArea(
         child: Stack(
           children: [
             // 1) Background image
             Positioned.fill(
               child: Image.asset(
-                "assets/versatale_home_image.png", // Update path to your asset
+                "assets/versatale_home_image.png",
                 fit: BoxFit.cover,
               ),
             ),
-
-            // 2) Small black box with a back arrow in the top-left corner
+            // 2) Back button
             Positioned(
               top: 10,
               left: 10,
@@ -97,13 +89,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
             ),
-
-            // 3) Registration form in the center
+            // 3) Login form
             LayoutBuilder(
               builder: (context, constraints) {
-                final double screenWidth = constraints.maxWidth;
-                // Dynamically compute font size, capping at 22
-                final double fontSize = min(screenWidth * 0.05, 22.0);
+                double screenWidth = constraints.maxWidth;
+                double fontSize = min(screenWidth * 0.05, 22.0);
 
                 return Center(
                   child: SingleChildScrollView(
@@ -113,25 +103,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Title
-                          Text(
-                            "Create an Account",
-                            style: TextStyle(
-                              fontSize: fontSize + 4,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              shadows: const [
-                                Shadow(
-                                  color: Colors.black,
-                                  offset: Offset(1, 1),
-                                  blurRadius: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 30),
-
-                          // Email field
+                          // Email Field
                           TextField(
                             controller: emailController,
                             style: TextStyle(
@@ -140,12 +112,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                             decoration: InputDecoration(
-                              labelText: "Email",
+                              labelText: 'Email',
                               labelStyle: TextStyle(
                                 fontSize: fontSize * 0.9,
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                shadows: const [
+                                shadows: [
                                   Shadow(
                                     color: Colors.black,
                                     offset: Offset(1, 1),
@@ -156,14 +128,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               filled: true,
                               fillColor: Colors.black.withOpacity(0.4),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: Colors.white),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                             ),
                           ),
                           const SizedBox(height: 15),
 
-                          // Password field
+                          // Password Field
                           TextField(
                             controller: passwordController,
                             obscureText: true,
@@ -173,12 +144,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                             decoration: InputDecoration(
-                              labelText: "Password",
+                              labelText: 'Password',
                               labelStyle: TextStyle(
                                 fontSize: fontSize * 0.9,
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                shadows: const [
+                                shadows: [
                                   Shadow(
                                     color: Colors.black,
                                     offset: Offset(1, 1),
@@ -189,14 +160,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               filled: true,
                               fillColor: Colors.black.withOpacity(0.4),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: Colors.white),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+
+                          // Forgot Password link
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const ForgotPasswordPage(),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.4),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Forgot Password?',
+                                  style: TextStyle(
+                                    fontSize: fontSize * 0.8,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    decoration: TextDecoration.underline,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black,
+                                        offset: Offset(1, 1),
+                                        blurRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                           const SizedBox(height: 20),
 
-                          // Register button
+                          // Login Button
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
@@ -212,14 +224,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   width: 2,
                                 ),
                               ),
-                              onPressed: register,
+                              onPressed: _login,
                               child: Text(
-                                "Register",
+                                'Log In',
                                 style: TextStyle(
                                   fontSize: fontSize,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
-                                  shadows: const [
+                                  shadows: [
                                     Shadow(
                                       color: Colors.black,
                                       offset: Offset(1, 1),
