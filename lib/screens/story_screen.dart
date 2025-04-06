@@ -27,7 +27,6 @@ class _StoryScreenState extends State<StoryScreen> {
   final AuthService authService = AuthService();
   final StoryService storyService = StoryService();
   final TextEditingController textController = TextEditingController();
-  // Removed scroll-to-bottom behavior for main story text box.
   final ScrollController _scrollController = ScrollController();
 
   late List<String> currentOptions;
@@ -99,7 +98,7 @@ class _StoryScreenState extends State<StoryScreen> {
         logout(context);
         break;
       case _MenuOption.closeMenu:
-      // Close menu automatically when an item is selected; no further action needed.
+      // No further action needed.
         break;
     }
   }
@@ -118,6 +117,8 @@ class _StoryScreenState extends State<StoryScreen> {
       showErrorDialog(context, "$e");
     } finally {
       setState(() => _isRequestInProgress = false);
+      // Reset scroll position to the top after generating the new leg.
+      _scrollController.jumpTo(0.0);
     }
   }
 
@@ -162,6 +163,8 @@ class _StoryScreenState extends State<StoryScreen> {
       showErrorDialog(context, "$e");
     } finally {
       setState(() => _isRequestInProgress = false);
+      // Optionally, also scroll to top when reverting to the previous leg:
+      _scrollController.jumpTo(0.0);
     }
   }
 
@@ -193,7 +196,6 @@ class _StoryScreenState extends State<StoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Use an AppBar with no default back arrow; title in a FittedBox for dynamic sizing.
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -405,7 +407,6 @@ class _FullStoryDialogState extends State<FullStoryDialog> {
   @override
   void initState() {
     super.initState();
-    // Wait for the frame to render, then jump to the bottom.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_dialogScrollController.hasClients) {
         _dialogScrollController.jumpTo(_dialogScrollController.position.maxScrollExtent);
@@ -422,7 +423,6 @@ class _FullStoryDialogState extends State<FullStoryDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      // Wrap the title in a FittedBox to scale down if needed.
       title: FittedBox(
         fit: BoxFit.scaleDown,
         child: Text("Full Story So Far", style: GoogleFonts.atma()),
