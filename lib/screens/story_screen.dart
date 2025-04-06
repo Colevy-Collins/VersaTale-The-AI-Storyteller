@@ -27,6 +27,7 @@ class _StoryScreenState extends State<StoryScreen> {
   final AuthService authService = AuthService();
   final StoryService storyService = StoryService();
   final TextEditingController textController = TextEditingController();
+  // Removed scroll-to-bottom behavior for main story text box.
   final ScrollController _scrollController = ScrollController();
 
   late List<String> currentOptions;
@@ -39,7 +40,6 @@ class _StoryScreenState extends State<StoryScreen> {
     textController.text = widget.initialLeg;
     currentOptions = widget.options;
     _storyTitle = widget.storyTitle;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   /// Shows a confirmation dialog before reverting to the previous leg.
@@ -118,7 +118,6 @@ class _StoryScreenState extends State<StoryScreen> {
       showErrorDialog(context, "$e");
     } finally {
       setState(() => _isRequestInProgress = false);
-      _scrollToBottom();
     }
   }
 
@@ -163,7 +162,6 @@ class _StoryScreenState extends State<StoryScreen> {
       showErrorDialog(context, "$e");
     } finally {
       setState(() => _isRequestInProgress = false);
-      _scrollToBottom();
     }
   }
 
@@ -184,19 +182,6 @@ class _StoryScreenState extends State<StoryScreen> {
         SnackBar(content: Text("Error saving story: $e", style: GoogleFonts.atma())),
       );
     }
-  }
-
-  /// Auto-scrolls to the bottom of the story text.
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   @override
@@ -338,9 +323,12 @@ class _StoryScreenState extends State<StoryScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: Text(
-                          "Choose Next Action",
-                          style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            "Choose Next Action",
+                            style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                   ],
@@ -393,8 +381,9 @@ class _StoryScreenState extends State<StoryScreen> {
   }
 }
 
-/// Dialog widget for displaying the full story and current options.
-class FullStoryDialog extends StatelessWidget {
+/// Stateful dialog widget for displaying the full story and current options.
+/// This version auto-scrolls to the bottom when displayed.
+class FullStoryDialog extends StatefulWidget {
   final String fullStory;
   final List<String> dialogOptions;
   final ValueChanged<String> onOptionSelected;
@@ -407,22 +396,56 @@ class FullStoryDialog extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  _FullStoryDialogState createState() => _FullStoryDialogState();
+}
+
+class _FullStoryDialogState extends State<FullStoryDialog> {
+  final ScrollController _dialogScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Wait for the frame to render, then jump to the bottom.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_dialogScrollController.hasClients) {
+        _dialogScrollController.jumpTo(_dialogScrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _dialogScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text("Full Story So Far", style: GoogleFonts.atma()),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(fullStory, style: GoogleFonts.atma()),
-            const SizedBox(height: 16),
-            // NOTE: The “Choose Next Action” button was moved from here into the actions below.
-          ],
+      // Wrap the title in a FittedBox to scale down if needed.
+      title: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text("Full Story So Far", style: GoogleFonts.atma()),
+      ),
+      content: Container(
+        height: 300,
+        width: double.maxFinite,
+        child: Scrollbar(
+          controller: _dialogScrollController,
+          child: SingleChildScrollView(
+            controller: _dialogScrollController,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(widget.fullStory, style: GoogleFonts.atma()),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
         ),
       ),
       actions: [
-        // Show "Choose Next Action" in the bottom bar if there are options available:
-        if (dialogOptions.isNotEmpty)
+        if (widget.dialogOptions.isNotEmpty)
           ElevatedButton(
             onPressed: () {
               showModalBottomSheet(
@@ -431,9 +454,9 @@ class FullStoryDialog extends StatelessWidget {
                   return Container(
                     height: 250,
                     child: ListView.builder(
-                      itemCount: dialogOptions.length,
+                      itemCount: widget.dialogOptions.length,
                       itemBuilder: (context, index) {
-                        bool isFinal = dialogOptions[index] == "The story ends";
+                        bool isFinal = widget.dialogOptions[index] == "The story ends";
                         return ListTile(
                           title: ElevatedButton(
                             style: ElevatedButton.styleFrom(
@@ -446,11 +469,11 @@ class FullStoryDialog extends StatelessWidget {
                             onPressed: isFinal
                                 ? null
                                 : () {
-                              onOptionSelected(dialogOptions[index]);
+                              widget.onOptionSelected(widget.dialogOptions[index]);
                               Navigator.pop(context);
                             },
                             child: Text(
-                              isFinal ? "The story ends" : dialogOptions[index],
+                              isFinal ? "The story ends" : widget.dialogOptions[index],
                               style: GoogleFonts.atma(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -464,14 +487,20 @@ class FullStoryDialog extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFC27B31),
             ),
-            child: Text(
-              "Choose Next Action",
-              style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                "Choose Next Action",
+                style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text("Close", style: GoogleFonts.atma()),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text("Close", style: GoogleFonts.atma()),
+          ),
         ),
       ],
     );
