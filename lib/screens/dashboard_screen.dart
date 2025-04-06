@@ -1,13 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-// Adjust these imports to match your project structure
 import 'main_splash_screen.dart';
 import 'create_new_story_screen.dart';
 import 'view_stories_screen.dart';
 import 'story_screen.dart';
 import '../services/story_service.dart';
+import '../services/auth_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -91,35 +90,6 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
-              // "Log Out" button pinned at top-left
-              Positioned(
-                top: 20,
-                left: 16,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    backgroundColor: Colors.white.withOpacity(0.7),
-                  ),
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const MainSplashScreen()),
-                    );
-                  },
-                  child: Text(
-                    "Log Out",
-                    style: GoogleFonts.atma(
-                      fontSize: logoutFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF453E2C),
-                    ),
-                  ),
-                ),
-              ),
-
               // Centered content (Title and main buttons)
               Positioned.fill(
                 child: SingleChildScrollView(
@@ -151,7 +121,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 40),
 
-                        // Wrap for main buttons (automatically wraps to new row when necessary)
+                        // Wrap for main buttons (archives, start new, manage profile, continue)
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
@@ -190,6 +160,40 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+
+              // "Log Out" button pinned at top-left
+              // Placed last in the Stack so it appears on top of everything else.
+              Positioned(
+                top: 20,
+                left: 16,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    backgroundColor: Colors.white.withOpacity(0.7),
+                  ),
+                  onPressed: () async {
+                    // Sign out from Firebase
+                    await AuthService().signOut();
+
+                    // Navigate to the splash screen
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const MainSplashScreen()),
+                    );
+                  },
+                  child: Text(
+                    "Log Out",
+                    style: GoogleFonts.atma(
+                      fontSize: logoutFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF453E2C),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -197,7 +201,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Helper method to build each button
+  // Helper method to build each main menu button
   Widget _buildButton(
       BuildContext context,
       String label, {

@@ -115,7 +115,7 @@ class _StoryScreenState extends State<StoryScreen> {
         _storyTitle = response["storyTitle"];
       }
     } catch (e) {
-      showErrorDialog(context, "Error calling backend: $e");
+      showErrorDialog(context, "$e");
     } finally {
       setState(() => _isRequestInProgress = false);
       _scrollToBottom();
@@ -126,7 +126,7 @@ class _StoryScreenState extends State<StoryScreen> {
   void viewFullStoryDialog(BuildContext context) async {
     try {
       final response = await storyService.getFullStory();
-      final String fullStory = response["storyLeg"] ?? "";
+      final String fullStory = response["initialLeg"] ?? "Your story will be here";
       final List<String> dialogOptions = List<String>.from(response["options"] ?? []);
       showDialog(
         context: context,
@@ -143,7 +143,7 @@ class _StoryScreenState extends State<StoryScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error fetching full story: $e")),
+        SnackBar(content: Text("$e")),
       );
     }
   }
@@ -160,7 +160,7 @@ class _StoryScreenState extends State<StoryScreen> {
         _storyTitle = response["storyTitle"];
       }
     } catch (e) {
-      showErrorDialog(context, "Error calling backend (Back): $e");
+      showErrorDialog(context, "$e");
     } finally {
       setState(() => _isRequestInProgress = false);
       _scrollToBottom();
@@ -416,57 +416,59 @@ class FullStoryDialog extends StatelessWidget {
           children: [
             Text(fullStory, style: GoogleFonts.atma()),
             const SizedBox(height: 16),
-            if (dialogOptions.isNotEmpty)
-              ElevatedButton(
-                onPressed: () {
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (context) {
-                      return Container(
-                        height: 250,
-                        child: ListView.builder(
-                          itemCount: dialogOptions.length,
-                          itemBuilder: (context, index) {
-                            bool isFinal = dialogOptions[index] == "The story ends";
-                            return ListTile(
-                              title: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFC27B31),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                onPressed: isFinal
-                                    ? null
-                                    : () {
-                                  onOptionSelected(dialogOptions[index]);
-                                  Navigator.pop(context);
-                                },
-                                child: Text(
-                                  isFinal ? "The story ends" : dialogOptions[index],
-                                  style: GoogleFonts.atma(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFC27B31),
-                ),
-                child: Text(
-                  "Choose Next Action",
-                  style: GoogleFonts.atma(fontWeight: FontWeight.bold),
-                ),
-              ),
+            // NOTE: The “Choose Next Action” button was moved from here into the actions below.
           ],
         ),
       ),
       actions: [
+        // Show "Choose Next Action" in the bottom bar if there are options available:
+        if (dialogOptions.isNotEmpty)
+          ElevatedButton(
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                builder: (context) {
+                  return Container(
+                    height: 250,
+                    child: ListView.builder(
+                      itemCount: dialogOptions.length,
+                      itemBuilder: (context, index) {
+                        bool isFinal = dialogOptions[index] == "The story ends";
+                        return ListTile(
+                          title: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFC27B31),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: isFinal
+                                ? null
+                                : () {
+                              onOptionSelected(dialogOptions[index]);
+                              Navigator.pop(context);
+                            },
+                            child: Text(
+                              isFinal ? "The story ends" : dialogOptions[index],
+                              style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFC27B31),
+            ),
+            child: Text(
+              "Choose Next Action",
+              style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+            ),
+          ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text("Close", style: GoogleFonts.atma()),

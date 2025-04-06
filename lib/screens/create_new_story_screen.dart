@@ -110,7 +110,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Error: $e", style: GoogleFonts.atma()),
+          content: Text("$e", style: GoogleFonts.atma()),
         ),
       );
     } finally {

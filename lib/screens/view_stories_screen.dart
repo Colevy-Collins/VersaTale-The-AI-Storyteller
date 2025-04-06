@@ -123,9 +123,9 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                                     anchor.remove();
                                     html.Url.revokeObjectUrl(url);
                                   } catch (e) {
-                                    print("Error downloading story: $e");
+                                    print("$e");
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text("Error downloading story: $e")),
+                                      SnackBar(content: Text("$e")),
                                     );
                                   }
                                 },
@@ -143,9 +143,9 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                         },
                       );
                     } catch (e) {
-                      print("Error viewing story: $e");
+                      print("$e");
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error viewing story: $e")),
+                        SnackBar(content: Text("$e")),
                       );
                     }
                   },
@@ -157,9 +157,9 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                       await storyService.deleteStory(storyId: story["story_ID"]);
                       fetchSavedStories();
                     } catch (e) {
-                      print("Error deleting story: $e");
+                      print("$e");
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error deleting story: $e")),
+                        SnackBar(content: Text("$e")),
                       );
                     }
                   },
@@ -184,9 +184,9 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
                         ),
                       );
                     } catch (e) {
-                      print("Error continuing adventure: $e");
+                      print("$e");
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error continuing adventure: $e")),
+                        SnackBar(content: Text("$e")),
                       );
                     }
                   },
@@ -212,7 +212,7 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
-          ? Center(child: Text("Error: $errorMessage", style: TextStyle(fontSize: 16)))
+          ? Center(child: Text("$errorMessage", style: TextStyle(fontSize: 16)))
           : stories.isEmpty
           ? const Center(child: Text("No saved stories found."))
           : RefreshIndicator(

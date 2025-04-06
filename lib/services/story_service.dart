@@ -16,7 +16,7 @@ class StoryService {
   }) async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
 
     final url = Uri.parse("$backendUrl/start_story");
@@ -49,7 +49,11 @@ class StoryService {
     } else {
       final errorMessage =
       response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
@@ -61,7 +65,7 @@ class StoryService {
   Future<Map<String, dynamic>> getNextLeg({required String decision}) async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/next_leg");
     final payload = jsonEncode({
@@ -84,7 +88,11 @@ class StoryService {
       };
     } else {
       String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
@@ -92,7 +100,7 @@ class StoryService {
   Future<Map<String, dynamic>> saveStory() async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/save_story");
     final response = await http.post(
@@ -106,15 +114,20 @@ class StoryService {
       final data = jsonDecode(response.body);
       return data;
     } else {
-      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      final errorMessage =
+      response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
   Future<List<dynamic>> getSavedStories() async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/saved_stories");
     final response = await http.get(url, headers: {
@@ -126,7 +139,11 @@ class StoryService {
       return data["stories"] as List<dynamic>;
     } else {
       String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
@@ -135,7 +152,7 @@ class StoryService {
   Future<Map<String, dynamic>?> getActiveStory() async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/story");
     final response = await http.get(
@@ -154,8 +171,13 @@ class StoryService {
         "storyTitle": data["storyTitle"] ?? "Untitled Story",
       };
     } else {
-      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      final errorMessage =
+      response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
@@ -163,7 +185,7 @@ class StoryService {
   Future<Map<String, dynamic>> viewStory({required String storyId}) async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/view_story?storyId=$storyId");
     final response = await http.get(
@@ -179,7 +201,11 @@ class StoryService {
       return data;
     } else {
       String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
@@ -187,7 +213,7 @@ class StoryService {
   Future<bool> deleteStory({required String storyId}) async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/delete_story");
     final payload = jsonEncode({
@@ -204,8 +230,13 @@ class StoryService {
     if (response.statusCode == 200) {
       return true;
     } else {
-      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      final errorMessage =
+      response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
@@ -215,7 +246,7 @@ class StoryService {
     final token = await authService.getToken();
     print("storyId: $storyId");
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/continue_story");
     final payload = jsonEncode({
@@ -238,14 +269,18 @@ class StoryService {
       };
     } else {
       String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
   Future<Map<String, dynamic>> getPreviousLeg() async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
 
     // Update this URL path to match your backend route for going back one leg.
@@ -269,16 +304,19 @@ class StoryService {
         "storyTitle": data["aiResponse"]["storyTitle"] ?? "Untitled Story",
       };
     } else {
-      String errorMessage =
-      response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
 
   Future<Map<String, dynamic>> getFullStory() async {
     final token = await authService.getToken();
     if (token == null) {
-      throw Exception("User is not authenticated.");
+      throw "User is not authenticated.";
     }
     final url = Uri.parse("$backendUrl/story");
 
@@ -296,11 +334,11 @@ class StoryService {
       return data;
     } else {
       String errorMessage = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-      throw Exception("Error: $errorMessage");
+      if (  jsonDecode(response.body)["message"] != null) {
+        throw   jsonDecode(response.body)["message"];
+      } else {
+        throw errorMessage;
+      }
     }
   }
-
-
-
-
 }
