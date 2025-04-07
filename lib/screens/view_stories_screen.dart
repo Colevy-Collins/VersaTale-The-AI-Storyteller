@@ -49,13 +49,15 @@ class _ViewStoriesScreenState extends State<ViewStoriesScreen> {
   /// If parsing fails, returns the raw string.
   String _formatTime(String rawTime) {
     try {
-      DateTime dateTime = DateTime.parse(rawTime);
-      // Example format: Jan 1, 2023 5:30 PM
+      // Parse the UTC time, then convert it to local time.
+      DateTime dateTime = DateTime.parse(rawTime).toLocal();
+      // Format the local time (example: Jan 1, 2023 5:30 PM).
       return DateFormat.yMMMd().add_jm().format(dateTime);
     } catch (e) {
       return rawTime;
     }
   }
+
 
   Widget buildStoryItem(Map<String, dynamic> story) {
     String storyTitle = story["storyTitle"] ?? "Untitled Story";

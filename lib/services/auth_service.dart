@@ -120,4 +120,44 @@ class AuthService {
       }
     }
   }
+
+  Future<AuthResult> updatePassword(String newPassword) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return AuthResult(user: null, message: "No user is currently signed in.");
+    }
+
+    try {
+      await currentUser.updatePassword(newPassword);
+      return AuthResult(user: _auth.currentUser, message: "Password updated.");
+    } catch (e) {
+      if (e is FirebaseAuthException) {
+        return AuthResult(user: null, message: _getFriendlyErrorMessage(e));
+      }
+      return AuthResult(user: null, message: "An unexpected error occurred. $e");
+    }
+  }
+
+// 3) Delete Account
+  Future<AuthResult> deleteAccount() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return AuthResult(user: null, message: "No user is currently signed in.");
+    }
+
+    try {
+      await currentUser.delete();
+      // The user is now deleted from Firebase side.
+      // Return a "null user" to indicate the account is gone.
+      return AuthResult(user: null, message: "Account deleted.");
+    } catch (e) {
+      if (e is FirebaseAuthException) {
+        return AuthResult(user: null, message: _getFriendlyErrorMessage(e));
+      }
+      return AuthResult(user: null, message: "An unexpected error occurred. $e");
+    }
+  }
+
+
+
 }

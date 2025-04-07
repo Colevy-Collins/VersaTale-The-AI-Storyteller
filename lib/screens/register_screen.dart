@@ -1,10 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import "../services/story_service.dart";
 // Adjust these imports for your project.
 import '../services/auth_service.dart';
-import 'dashboard_screen.dart'; // or wherever HomeScreen is
+import 'dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -17,6 +17,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final AuthService authService = AuthService();
+  final StoryService storyService = StoryService();
 
   /// Helper to show color-coded SnackBars:
   ///  - [isError] => red background
@@ -53,6 +54,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final result = await authService.signUp(email, password);
     if (result.user != null) {
+      try {
+        await storyService.updateLastAccessDate();
+      } catch (e) {
+        debugPrint("Failed to update last access date: $e");
+      }
       _showMessage("Registration successful!", isSuccess: true);
       Navigator.pushReplacement(
         context,

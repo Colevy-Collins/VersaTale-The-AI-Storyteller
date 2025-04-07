@@ -182,7 +182,7 @@ class _StoryScreenState extends State<StoryScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error saving story: $e", style: GoogleFonts.atma())),
+        SnackBar(content: Text("$e", style: GoogleFonts.atma())),
       );
     }
   }

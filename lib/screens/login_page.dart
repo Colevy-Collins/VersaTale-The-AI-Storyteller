@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'dashboard_screen.dart';
 import 'forgot_password_page.dart';
+import '../services/story_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -13,6 +14,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final AuthService authService = AuthService();
+  final StoryService storyService = StoryService();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
@@ -45,8 +47,13 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     final result = await authService.signIn(email, password);
-
     if (result.user != null) {
+      try {
+        await storyService.updateLastAccessDate();
+      } catch (e) {
+        debugPrint("Failed to update last access date: $e");
+      }
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),

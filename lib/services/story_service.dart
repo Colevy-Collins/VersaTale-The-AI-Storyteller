@@ -5,7 +5,7 @@ import 'auth_service.dart';
 
 class StoryService {
   // Replace with your actual backend URL.
-  final String backendUrl = "https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";
+  final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";
   final AuthService authService = AuthService();
 
   Future<Map<String, dynamic>> startStory({
@@ -57,8 +57,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -102,8 +104,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -139,8 +143,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -176,8 +182,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -218,8 +226,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -256,8 +266,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -296,8 +308,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -342,8 +356,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -383,8 +399,10 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
       }
     }
   }
@@ -420,8 +438,185 @@ class StoryService {
     } catch (e) {
       if (e is http.ClientException) {
         throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
       } else {
-        throw "An error occurred: $e";
+        throw "$e";
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> getUserProfile() async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw "User is not authenticated.";
+    }
+
+    // Suppose your backend has an endpoint like /profile that returns JSON:
+    // {
+    //   "creationDate": "...",
+    //   "lastAccessDate": "...",
+    //   ...
+    // }
+    final url = Uri.parse("$backendUrl/profile");
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data;
+      } else {
+        final errorMessage =
+        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+        if (jsonDecode(response.body)["message"] != null) {
+          throw jsonDecode(response.body)["message"];
+        } else {
+          throw errorMessage;
+        }
+      }
+    } on SocketException catch (_) {
+      throw "Server is unavailable or unreachable.";
+    } catch (e) {
+      if (e is http.ClientException) {
+        throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
+      } else {
+        throw "$e";
+      }
+    }
+  }
+
+  Future<void> deleteUserData() async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw "User is not authenticated.";
+    }
+
+    final url = Uri.parse("$backendUrl/delete_user_data");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        // success
+        return;
+      } else {
+        final errorMessage =
+        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+        if (jsonDecode(response.body)["message"] != null) {
+          throw jsonDecode(response.body)["message"];
+        } else {
+          throw errorMessage;
+        }
+      }
+    } on SocketException catch (_) {
+      throw "Server is unavailable or unreachable.";
+    } catch (e) {
+      if (e is http.ClientException) {
+        throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
+      } else {
+        throw "$e";
+      }
+    }
+  }
+
+  Future<bool> deleteAllStories() async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw "User is not authenticated.";
+    }
+
+    // Adjust this to match your actual backend endpoint for deleting all stories.
+    final url = Uri.parse("$backendUrl/delete_all_stories");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        final responseBody = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+        final decoded = jsonDecode(responseBody);
+
+        if (decoded["message"] != null) {
+          throw decoded["message"];
+        } else {
+          throw responseBody;
+        }
+      }
+    } on SocketException catch (_) {
+      throw "Server is unavailable or unreachable.";
+    } catch (e) {
+      if (e is http.ClientException) {
+        throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
+      } else {
+        throw "$e";
+      }
+    }
+  }
+
+  Future<void> updateLastAccessDate() async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw "User is not authenticated.";
+    }
+
+    final url = Uri.parse("$backendUrl/update_last_access");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        // Success
+        return;
+      } else {
+        final errorMessage =
+        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
+        if (jsonDecode(response.body)["message"] != null) {
+          throw jsonDecode(response.body)["message"];
+        } else {
+          throw errorMessage;
+        }
+      }
+    } on SocketException catch (_) {
+      throw "Server is unavailable or unreachable.";
+    } catch (e) {
+      if (e is http.ClientException) {
+        throw "Server is unavailable or unreachable. \n $e";
+      } else if (e.toString().contains("Route not found")) {
+        throw "Server route is not available.";
+      } else {
+        throw "$e";
       }
     }
   }

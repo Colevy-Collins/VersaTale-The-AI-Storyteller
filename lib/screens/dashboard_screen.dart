@@ -7,14 +7,16 @@ import 'view_stories_screen.dart';
 import 'story_screen.dart';
 import '../services/story_service.dart';
 import '../services/auth_service.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
   void _navigateToProfile(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Manage Profile tapped", style: GoogleFonts.atma()),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ProfileScreen(),
       ),
     );
   }
