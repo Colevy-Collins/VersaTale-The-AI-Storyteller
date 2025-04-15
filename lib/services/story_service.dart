@@ -5,7 +5,7 @@ import 'auth_service.dart';
 
 class StoryService {
   // Replace with your actual backend URL.
-  final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";
+  final String backendUrl = "https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";
   final AuthService authService = AuthService();
 
   Future<Map<String, dynamic>> startStory({

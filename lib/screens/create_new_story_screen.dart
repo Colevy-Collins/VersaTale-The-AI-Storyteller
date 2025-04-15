@@ -1,8 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// Dimensions & widgets from your project
-import '../services/dimension_map.dart';
+import '../services/dimension_map.dart'; // Now using groupedDimensionOptions
 import '../widgets/dimension_dropdown.dart';
 import '../services/story_service.dart';
 import 'story_screen.dart';
@@ -22,60 +21,124 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   int selectedOptionCount = 2;        // 2, 3, or 4
   String selectedStoryLength = "Short"; // "Short", "Medium", "Long"
 
-  // For saving user’s dropdown selections
+  // Maintain user selections for each dimension.
   final Map<String, String?> userSelections = {};
 
-  // Remember which expansion tiles are open/closed
-  final Map<String, bool> expansionState = {};
+  // Remember the expansion state for each group.
+  final Map<String, bool> groupExpansionState = {};
+
+  // Dimensions that should be excluded from the UI (the system will pick these at random)
+  final List<String> excludedDimensions = [
+    "Decision Options",
+    "Fail States",
+    "Puzzle & Final Challenge",
+    "Final Objective",
+    "Protagonist Customization",
+    "Moral Dilemmas",
+    "Consequences of Failure"
+  ];
 
   @override
   void initState() {
     super.initState();
-    // Mark all expansions as initially collapsed
-    dimensionDropdownOptions.forEach((dimKey, _) {
-      expansionState[dimKey] = false;
+    // Initialize all groups as collapsed.
+    groupedDimensionOptions.forEach((groupName, _) {
+      groupExpansionState[groupName] = false;
     });
   }
 
-  // Picks a random element from the given list if user left it as "Random"
-  String resolveRandom(String? userChoice, List<String> options) {
-    if (userChoice == null || userChoice == "Random") {
-      return pickRandomFromList(options);
+  /// Builds the grouped dimension UI.
+  List<Widget> _buildGroupedDimensionWidgets(double baseFontSize) {
+    List<Widget> groupWidgets = [];
+    groupedDimensionOptions.forEach((groupName, dimensions) {
+      if (dimensions is Map<String, dynamic>) {
+        // Build the list of dropdowns for this group, filtering out excluded dimensions.
+        List<Widget> dropdowns = _buildDimensionDropdownsForGroup(dimensions, baseFontSize);
+        // If all children are excluded (dropdowns is empty), skip this group entirely.
+        if (dropdowns.isEmpty) return;
+        groupWidgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Card(
+              color: const Color(0xFFE7E6D9),
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ExpansionTile(
+                key: PageStorageKey<String>(groupName),
+                title: Text(
+                  groupName,
+                  style: GoogleFonts.atma(
+                    fontWeight: FontWeight.bold,
+                    fontSize: baseFontSize + 2,
+                  ),
+                ),
+                initiallyExpanded: groupExpansionState[groupName] ?? false,
+                onExpansionChanged: (expanded) {
+                  setState(() {
+                    groupExpansionState[groupName] = expanded;
+                  });
+                },
+                children: dropdowns,
+              ),
+            ),
+          ),
+        );
+      }
+    });
+    return groupWidgets;
+  }
+
+  /// Builds dropdown widgets for each dimension in the given group.
+  List<Widget> _buildDimensionDropdownsForGroup(dynamic dimensions, double baseFontSize) {
+    List<Widget> dropdownWidgets = [];
+    if (dimensions is Map<String, dynamic>) {
+      dimensions.forEach((dimKey, dimValue) {
+        // Skip this dimension if it is in the excludedDimensions list.
+        if (excludedDimensions.contains(dimKey)) return;
+        if (dimValue is List) {
+          dropdownWidgets.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: DimensionDropdown(
+                label: dimKey,
+                options: List<String>.from(dimValue),
+                initialValue: userSelections[dimKey],
+                onChanged: (val) {
+                  setState(() {
+                    userSelections[dimKey] = val;
+                  });
+                },
+              ),
+            ),
+          );
+        }
+      });
     }
-    return userChoice;
+    return dropdownWidgets;
   }
 
-  String pickRandomFromList(List<String> options) {
-    if (options.isEmpty) return "Unknown";
-    final rand = Random();
-    return options[rand.nextInt(options.length)];
-  }
-
+  /// Builds the payload for the backend.
+  /// It iterates over all dimensions in the full map; for any dimension the user didn't set
+  /// (including those excluded from the UI), a random option is chosen.
   Map<String, dynamic> buildDimensionSelectionData() {
     final data = <String, dynamic>{};
 
-    dimensionDropdownOptions.forEach((dimKey, dimValue) {
-      if (dimValue is List) {
-        final userChoice = userSelections[dimKey];
-        final finalPick = resolveRandom(userChoice, List<String>.from(dimValue));
-        data[dimKey] = finalPick;
-      } else if (dimValue is Map<String, dynamic>) {
-        final subData = <String, dynamic>{};
-        dimValue.forEach((subKey, subValue) {
-          if (subValue is List) {
-            final mapKey = "$dimKey | $subKey";
-            final subUserChoice = userSelections[mapKey];
-            final finalPick = resolveRandom(subUserChoice, List<String>.from(subValue));
-            subData[subKey] = finalPick;
+    groupedDimensionOptions.forEach((groupName, dimensions) {
+      if (dimensions is Map<String, dynamic>) {
+        dimensions.forEach((dimKey, dimValue) {
+          if (dimValue is List) {
+            final userChoice = userSelections[dimKey];
+            List<String> options = List<String>.from(dimValue);
+            data[dimKey] = userChoice ?? (options..shuffle()).first;
           }
         });
-        data[dimKey] = subData;
       }
     });
 
     data["optionCount"] = selectedOptionCount;
     data["storyLength"] = selectedStoryLength;
-
     return data;
   }
 
@@ -84,7 +147,6 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     try {
       final selectionData = buildDimensionSelectionData();
       const String initialDecision = "Start Story";
-
       final response = await storyService.startStory(
         decision: initialDecision,
         dimensionData: selectionData,
@@ -92,11 +154,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         optionCount: selectedOptionCount,
         storyLength: selectedStoryLength,
       );
-
       final String initialLeg = response["storyLeg"];
       final List<dynamic> initialOptionsDynamic = response["options"];
       final List<String> initialOptions = List<String>.from(initialOptionsDynamic);
-
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -109,9 +169,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("$e", style: GoogleFonts.atma()),
-        ),
+        SnackBar(content: Text("$e", style: GoogleFonts.atma())),
       );
     } finally {
       setState(() => isLoading = false);
@@ -122,52 +180,13 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        // For smaller screens, scale text down
         final double screenWidth = constraints.maxWidth;
         final double baseFontSize = screenWidth < 400
             ? (screenWidth * 0.04).clamp(14.0, 18.0)
             : (screenWidth * 0.03).clamp(14.0, 20.0);
 
-        // Dimensions we skip entirely
-        final excludedDimensions = <String>[
-          "Decision Options",
-          "Fail States",
-          "Puzzle & Final Challenge",
-          "Final Objective",
-          "Protagonist Customization",
-          "Moral Dilemmas",
-          "Consequences of Failure"
-        ];
-
-        // Create expansion cards for each dimension
-        final dimensionWidgets = <Widget>[];
-        dimensionDropdownOptions.forEach((dimKey, dimValue) {
-          if (excludedDimensions.contains(dimKey)) return;
-
-          dimensionWidgets.add(
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
-                child: Card(
-                  color: const Color(0xFFE7E6D9),
-                  elevation: 3,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: _buildDimensionExpansionTile(
-                    dimKey,
-                    dimValue,
-                    baseFontSize,
-                  ),
-                ),
-              ),
-            ),
-          );
-        });
-
         return Scaffold(
-          backgroundColor: const Color(0xFFC27b31), // Warm background
+          backgroundColor: const Color(0xFFC27B31),
           body: SafeArea(
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -205,20 +224,16 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                     ),
                   ),
                   SizedBox(height: baseFontSize * 1.5),
-
-                  // Dimension expansions
-                  ...dimensionWidgets,
-
+                  // Insert the grouped dimension widgets.
+                  ..._buildGroupedDimensionWidgets(baseFontSize),
                   SizedBox(height: baseFontSize * 1.2),
-
-                  // Number of Options
+                  // Number of Options dropdown.
                   _buildLabeledCard(
                     "Number of Options:",
                     _buildOptionCountDropdown(baseFontSize),
                     baseFontSize,
                   ),
-
-                  // Story Length
+                  // Story Length dropdown.
                   _buildLabeledCard(
                     "Story Length:",
                     _buildStoryLengthDropdown(baseFontSize),
@@ -246,7 +261,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     );
   }
 
-  /// A helper card that displays a label + widget (dropdown, etc.)
+  /// Helper method: a labeled card widget.
   Widget _buildLabeledCard(String label, Widget content, double baseFontSize) {
     return Center(
       child: ConstrainedBox(
@@ -278,77 +293,6 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         ),
       ),
     );
-  }
-
-  /// Builds an ExpansionTile with dimension dropdown(s).
-  Widget _buildDimensionExpansionTile(
-      String dimKey,
-      dynamic dimValue,
-      double baseFontSize,
-      ) {
-    return ExpansionTile(
-      key: PageStorageKey<String>(dimKey),
-      title: Text(
-        dimKey,
-        style: GoogleFonts.atma(
-          fontWeight: FontWeight.bold,
-          fontSize: baseFontSize,
-        ),
-      ),
-      initiallyExpanded: expansionState[dimKey] ?? false,
-      onExpansionChanged: (expanded) {
-        setState(() {
-          expansionState[dimKey] = expanded;
-        });
-      },
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-          child: _buildDimensionContent(dimKey, dimValue, baseFontSize),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDimensionContent(
-      String dimKey,
-      dynamic dimValue,
-      double baseFontSize,
-      ) {
-    if (dimValue is List) {
-      return DimensionDropdown(
-        label: dimKey,
-        options: List<String>.from(dimValue),
-        initialValue: userSelections[dimKey],
-        onChanged: (val) {
-          setState(() {
-            userSelections[dimKey] = val;
-          });
-        },
-      );
-    } else if (dimValue is Map<String, dynamic>) {
-      final subWidgets = <Widget>[];
-      dimValue.forEach((subKey, subValue) {
-        if (subValue is List) {
-          final mapKey = "$dimKey | $subKey";
-          subWidgets.add(
-            DimensionDropdown(
-              label: subKey,
-              options: List<String>.from(subValue),
-              initialValue: userSelections[mapKey],
-              onChanged: (val) {
-                setState(() {
-                  userSelections[mapKey] = val;
-                });
-              },
-            ),
-          );
-          subWidgets.add(const SizedBox(height: 16));
-        }
-      });
-      return Column(children: subWidgets);
-    }
-    return const SizedBox.shrink();
   }
 
   Widget _buildOptionCountDropdown(double baseFontSize) {
