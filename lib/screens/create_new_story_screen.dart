@@ -1,18 +1,28 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-// Suppose you have a dimension_map.dart that defines groupedDimensionOptions
-import '../services/dimension_map.dart'; // Contains your groupedDimensionOptions JSON.
+import '../services/dimension_map.dart';          // your groupedDimensionOptions
+import '../services/dimension_exclusions.dart';   // NEW
 import '../widgets/dimension_dropdown.dart';
 import '../services/story_service.dart';
 import 'story_screen.dart';
 import 'multiplayer_host_lobby_screen.dart';
 
 class CreateNewStoryScreen extends StatefulWidget {
-  final bool isGroup; // Determines if we're creating a group (multiplayer) story
+  final bool isGroup;
+  final String? sessionId;
+  final String? joinCode;
+  final Map<String, dynamic>? initialDimensionData;
+  final Map<int, Map<String, dynamic>>? initialPlayersMap;
 
-  const CreateNewStoryScreen({Key? key, required this.isGroup}) : super(key: key);
+  const CreateNewStoryScreen({
+    Key? key,
+    required this.isGroup,
+    this.sessionId,
+    this.joinCode,
+    this.initialDimensionData,
+    this.initialPlayersMap,
+  }) : super(key: key);
 
   @override
   _CreateNewStoryScreenState createState() => _CreateNewStoryScreenState();
@@ -20,45 +30,33 @@ class CreateNewStoryScreen extends StatefulWidget {
 
 class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   final StoryService storyService = StoryService();
-
   bool isLoading = false;
   int maxLegs = 10;
+  int selectedOptionCount = 2;
+  String selectedStoryLength = "Short";
 
-  int selectedOptionCount = 2;       // 2,3,4
-  String selectedStoryLength = "Short"; // "Short", "Medium", "Long"
-
-  // Tracks user dropdown selections (dimensionKey -> userChoice)
+  late Map<String, dynamic> dimensionOptions;
   final Map<String, String?> userSelections = {};
-  // Remember which dimension groups are expanded
   final Map<String, bool> expansionState = {};
-
-  // Groups we skip entirely
-  final List<String> excludedDimensions = [
-    "Decision Options",
-    "Fail States",
-    "Puzzle & Final Challenge",
-    "Final Objective",
-    "Protagonist Customization",
-    "Moral Dilemmas",
-    "Consequences of Failure"
-  ];
 
   @override
   void initState() {
     super.initState();
-    // Initialize each group in groupedDimensionOptions as collapsed
-    groupedDimensionOptions.forEach((groupName, _) {
+    // Always show the full set of dimensions to both hosts & joiners:
+    dimensionOptions = groupedDimensionOptions;
+
+    // Initialize all groups as collapsed
+    dimensionOptions.forEach((groupName, _) {
       expansionState[groupName] = false;
     });
   }
 
-  /// Build dimension UI for each group
   List<Widget> _buildGroupedDimensionWidgets(double baseFontSize) {
-    List<Widget> groupWidgets = [];
-    groupedDimensionOptions.forEach((groupName, dimensions) {
+    final List<Widget> groupWidgets = [];
+    dimensionOptions.forEach((groupName, dims) {
       if (excludedDimensions.contains(groupName)) return;
-      if (dimensions is Map<String, dynamic>) {
-        final dropdowns = _buildDimensionDropdownsForGroup(dimensions, baseFontSize);
+      if (dims is Map<String, dynamic>) {
+        final dropdowns = _buildDimensionDropdownsForGroup(dims, baseFontSize);
         if (dropdowns.isEmpty) return;
         groupWidgets.add(
           Padding(
@@ -66,15 +64,17 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
             child: Card(
               color: const Color(0xFFE7E6D9),
               elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: ExpansionTile(
-                key: PageStorageKey<String>(groupName),
-                title: Text(
-                  groupName,
-                  style: GoogleFonts.atma(fontWeight: FontWeight.bold, fontSize: baseFontSize + 2),
-                ),
-                initiallyExpanded: expansionState[groupName] ?? false,
-                onExpansionChanged: (expanded) => setState(() { expansionState[groupName] = expanded; }),
+                key: PageStorageKey(groupName),
+                title: Text(groupName,
+                    style: GoogleFonts.atma(
+                        fontSize: baseFontSize + 2,
+                        fontWeight: FontWeight.bold)),
+                initiallyExpanded: expansionState[groupName]!,
+                onExpansionChanged: (exp) =>
+                    setState(() => expansionState[groupName] = exp),
                 children: dropdowns,
               ),
             ),
@@ -85,41 +85,39 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     return groupWidgets;
   }
 
-  /// Build dimension dropdowns for each dimension within a group
-  List<Widget> _buildDimensionDropdownsForGroup(Map<String, dynamic> dimensions, double baseFontSize) {
-    List<Widget> dropdownWidgets = [];
-    dimensions.forEach((dimKey, dimValue) {
+  List<Widget> _buildDimensionDropdownsForGroup(
+      Map<String, dynamic> dims, double baseFontSize) {
+    final List<Widget> widgets = [];
+    dims.forEach((dimKey, dimVal) {
       if (excludedDimensions.contains(dimKey)) return;
-      if (dimValue is List) {
-        dropdownWidgets.add(
+      if (dimVal is List) {
+        widgets.add(
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: DimensionDropdown(
               label: dimKey,
-              options: List<String>.from(dimValue),
+              options: List<String>.from(dimVal),
               initialValue: userSelections[dimKey],
-              onChanged: (val) => setState(() {
-                userSelections[dimKey] = val;
-              }),
+              onChanged: (val) =>
+                  setState(() => userSelections[dimKey] = val),
             ),
           ),
         );
       }
     });
-    return dropdownWidgets;
+    return widgets;
   }
 
-  /// Builds dimension payload (dimensionKey -> userChoice or random)
-  Map<String, dynamic> buildDimensionSelectionData() {
+  Map<String, dynamic> _buildDimensionSelectionData() {
     final data = <String, dynamic>{};
-    groupedDimensionOptions.forEach((_, groupValues) {
-      if (groupValues is Map<String, dynamic>) {
-        groupValues.forEach((dimKey, dimValue) {
-          if (dimValue is List) {
-            final userChoice = userSelections[dimKey];
-            final options = List<String>.from(dimValue);
-            // If no user choice, pick a random element
-            data[dimKey] = userChoice ?? (options..shuffle()).first;
+    groupedDimensionOptions.forEach((_, groupVals) {
+      if (groupVals is Map<String, dynamic>) {
+        groupVals.forEach((k, v) {
+          if (v is List) {
+            final choice = userSelections[k];
+            final opts = List<String>.from(v);
+            data[k] = choice ?? (opts..shuffle()).first;
           }
         });
       }
@@ -129,21 +127,19 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     return data;
   }
 
-  /// For vote: only the explicitly chosen dimensions
-  Map<String, String> buildVoteData() {
+  Map<String, String> _buildVoteData() {
     final vote = <String, String>{};
-    userSelections.forEach((dimKey, val) {
-      if (val != null) vote[dimKey] = val;
+    userSelections.forEach((k, v) {
+      if (v != null) vote[k] = v;
     });
     return vote;
   }
 
-  /// Start a SOLO story
-  Future<void> startSoloStory() async {
+  Future<void> _startSoloStory() async {
     setState(() => isLoading = true);
     try {
-      final dims = buildDimensionSelectionData();
-      final response = await storyService.startStory(
+      final dims = _buildDimensionSelectionData();
+      final res = await storyService.startStory(
         decision: "Start Story",
         dimensionData: dims,
         maxLegs: maxLegs,
@@ -154,119 +150,123 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => StoryScreen(
-            initialLeg: response["storyLeg"],
-            options: List<String>.from(response["options"]),
-            storyTitle: response["storyTitle"],
+            initialLeg: res["storyLeg"],
+            options: List<String>.from(res["options"]),
+            storyTitle: res["storyTitle"],
           ),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("$e", style: GoogleFonts.atma())),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("$e")));
     } finally {
       setState(() => isLoading = false);
     }
   }
 
-  /// Start a GROUP story and navigate to the host lobby
-  Future<void> startGroupStory() async {
+  Future<void> _startGroupStory() async {
     setState(() => isLoading = true);
     try {
       final payload = {
         "decision": "Start Story",
-        // "dimensions": dims, etc...
+        "dimensions": _buildDimensionSelectionData(),
+        "maxLegs": maxLegs,
+        "optionCount": selectedOptionCount,
+        "storyLength": selectedStoryLength,
+        "vote": _buildVoteData(),
       };
-
       final result = await storyService.startGroupStory(payload);
-      // result = { "sessionId", "joinCode", "storyState", "players" }
-
       final players = Map<String, dynamic>.from(result["players"] ?? {});
-      // Convert string keys to int
-      final parsedPlayers = players.map((slotStr, info) {
-        final slot = int.parse(slotStr);
-        return MapEntry(slot, Map<String, dynamic>.from(info));
-      });
-
+      final parsed = players.map<int, Map<String, dynamic>>(
+            (k, v) => MapEntry(int.parse(k), Map<String, dynamic>.from(v)),
+      );
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => MultiplayerHostLobbyScreen(
-            dimensionData:     result["storyState"]["dimensions"] ?? {},
-            sessionId:         result["sessionId"],
-            joinCode:          result["joinCode"],
-            playersMap:        parsedPlayers,
+            dimensionData: result["storyState"]["dimensions"] ?? {},
+            sessionId: result["sessionId"],
+            joinCode: result["joinCode"],
+            playersMap: parsed,
           ),
         ),
       );
     } catch (e) {
-      // handle error
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("$e")));
     } finally {
       setState(() => isLoading = false);
     }
   }
 
-  Widget _buildOptionCountDropdown(double baseFontSize) {
-    final options = [2, 3, 4];
+  Future<void> _submitGroupVote() async {
+    setState(() => isLoading = true);
+    try {
+      await storyService.submitVote(_buildVoteData());
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MultiplayerHostLobbyScreen(
+            dimensionData: groupedDimensionOptions,
+            sessionId: widget.sessionId!,
+            joinCode: widget.joinCode!,
+            playersMap: widget.initialPlayersMap!,
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Vote failed: $e")));
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Widget _buildOptionCountDropdown(double fs) {
     return DropdownButton<int>(
       value: selectedOptionCount,
       isExpanded: true,
       style: GoogleFonts.atma(
-          fontSize: baseFontSize, color: Colors.black87, fontWeight: FontWeight.bold
-      ),
-      items: options.map((count) {
-        return DropdownMenuItem<int>(
-          value: count,
-          child: Text(count.toString()),
-        );
-      }).toList(),
-      onChanged: (value) {
-        setState(() => selectedOptionCount = value!);
-      },
+          fontSize: fs, fontWeight: FontWeight.bold, color: Colors.black87),
+      items: [2, 3, 4]
+          .map((c) => DropdownMenuItem(value: c, child: Text(c.toString())))
+          .toList(),
+      onChanged: (v) => setState(() => selectedOptionCount = v!),
     );
   }
 
-  Widget _buildStoryLengthDropdown(double baseFontSize) {
-    final lengthOptions = ["Short", "Medium", "Long"];
+  Widget _buildStoryLengthDropdown(double fs) {
     return DropdownButton<String>(
       value: selectedStoryLength,
       isExpanded: true,
       style: GoogleFonts.atma(
-          fontSize: baseFontSize, color: Colors.black87, fontWeight: FontWeight.bold
-      ),
-      items: lengthOptions.map((length) {
-        return DropdownMenuItem<String>(
-          value: length,
-          child: Text(length),
-        );
-      }).toList(),
-      onChanged: (value) {
-        setState(() => selectedStoryLength = value!);
-      },
+          fontSize: fs, fontWeight: FontWeight.bold, color: Colors.black87),
+      items: ["Short", "Medium", "Long"]
+          .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+          .toList(),
+      onChanged: (v) => setState(() => selectedStoryLength = v!),
     );
   }
 
-  Widget _buildLabeledCard(String label, Widget content, double baseFontSize) {
+  Widget _buildLabeledCard(String label, Widget content, double fs) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500),
         child: Card(
           color: const Color(0xFFE7E6D9),
           elevation: 3,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: GoogleFonts.atma(
-                    fontSize: baseFontSize,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
+                Text(label,
+                    style: GoogleFonts.atma(
+                        fontSize: fs,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87)),
                 const SizedBox(height: 8),
                 content,
               ],
@@ -279,10 +279,11 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (ctx, constraints) {
-      final screenWidth = constraints.maxWidth;
-      final baseFontSize = (screenWidth * 0.03).clamp(14.0, 20.0);
-      final dimensionWidgets = _buildGroupedDimensionWidgets(baseFontSize);
+    final isJoiner = widget.isGroup && widget.sessionId != null;
+    return LayoutBuilder(builder: (ctx, cons) {
+      final w = cons.maxWidth;
+      final baseFS = (w * 0.03).clamp(14.0, 20.0);
+      final dims = _buildGroupedDimensionWidgets(baseFS);
 
       return Scaffold(
         backgroundColor: const Color(0xFFC27b31),
@@ -302,53 +303,39 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                     ),
                   ],
                 ),
-                SizedBox(height: baseFontSize),
+                SizedBox(height: baseFS),
                 Text(
-                  "Create Your New Adventure",
+                  widget.isGroup
+                      ? (isJoiner
+                      ? "Vote on Story Settings"
+                      : "Configure Group Story")
+                      : "Create Your New Adventure",
                   textAlign: TextAlign.center,
                   style: GoogleFonts.atma(
-                    fontSize: baseFontSize + 8,
+                    fontSize: baseFS + 8,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(height: baseFontSize),
-                Text(
-                  "Select only the dimensions you care about.\nUnselected ones will be randomized.",
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.atma(
-                    fontSize: baseFontSize,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: baseFontSize * 1.5),
-                ...dimensionWidgets,
-                SizedBox(height: baseFontSize * 1.2),
-                _buildLabeledCard(
-                  "Number of Options:",
-                  _buildOptionCountDropdown(baseFontSize),
-                  baseFontSize,
-                ),
-                _buildLabeledCard(
-                  "Story Length:",
-                  _buildStoryLengthDropdown(baseFontSize),
-                  baseFontSize,
-                ),
-                SizedBox(height: baseFontSize * 2),
+                SizedBox(height: baseFS),
+                ...dims,
+                if (!isJoiner) ...[
+                  _buildLabeledCard(
+                      "Number of Options:", _buildOptionCountDropdown(baseFS), baseFS),
+                  _buildLabeledCard("Story Length:", _buildStoryLengthDropdown(baseFS), baseFS),
+                  SizedBox(height: baseFS * 2),
+                ],
               ],
             ),
           ),
         ),
         floatingActionButton: FloatingActionButton.extended(
-          onPressed: widget.isGroup ? startGroupStory : startSoloStory,
+          onPressed: isJoiner ? _submitGroupVote : (widget.isGroup ? _startGroupStory : _startSoloStory),
           label: Text(
-            widget.isGroup ? "Proceed to Host Lobby" : "Start Story",
-            style: GoogleFonts.atma(
-              color: Colors.black87,
-              fontSize: baseFontSize,
-              fontWeight: FontWeight.bold,
-            ),
+            widget.isGroup
+                ? (isJoiner ? "Submit Votes" : "Proceed to Lobby")
+                : "Start Story",
+            style: GoogleFonts.atma(fontSize: baseFS, fontWeight: FontWeight.bold),
           ),
           backgroundColor: const Color(0xFFE7E6D9),
         ),
@@ -356,4 +343,3 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     });
   }
 }
-
