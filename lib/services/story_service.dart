@@ -787,33 +787,28 @@ class StoryService {
     }
   }
 
+  /* ---------------------------------------------------------------------------
+   *  FETCH LOBBY STATE  – returns the entire JSON from /lobby_state
+   * ------------------------------------------------------------------------ */
   Future<Map<String, dynamic>> fetchLobbyState(String sessionId) async {
     final token = await authService.getToken();
     if (token == null) throw "User is not authenticated.";
-    final url = Uri.parse("$backendUrl/lobby_state?sessionId=$sessionId");
 
-    final response = await http.get(
-      url,
+    final res = await http.get(
+      Uri.parse('$backendUrl/lobby_state?sessionId=$sessionId'),
       headers: {
-        'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
       },
     );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
     } else {
-      final body = response.body;
-      String msg;
-      try {
-        final data = jsonDecode(body);
-        msg = data['message'] ?? body;
-      } catch (_) {
-        msg = body;
-      }
-      throw msg;
+      final err = jsonDecode(res.body);
+      throw err['message'] ?? res.body;
     }
   }
-
   Future<Map<String, dynamic>> updatePlayerName(Map<String, dynamic> payload) async {
     final token = await authService.getToken();
     if (token == null) throw "Not authenticated";
@@ -878,21 +873,28 @@ class StoryService {
     return jsonDecode(response.body);
   }
 
-  /// Called by **host** to resolve all votes.
-  /// Server should tally votes, break ties, and return:
-  /// { "resolvedDimensions": { dimKey: winningOption, ... } }
+  /* ---------------------------------------------------------------------------
+   *  HOST‑ONLY  – resolve votes, server returns {resolvedDimensions:{...}}
+   * ------------------------------------------------------------------------ */
   Future<Map<String, dynamic>> resolveVotes(String sessionId) async {
     final token = await authService.getToken();
-    if (token == null) throw "Not authenticated";
+    if (token == null) throw "User is not authenticated.";
+
     final res = await http.post(
       Uri.parse('$backendUrl/resolve_votes'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({ 'sessionId': sessionId }),
+      body: jsonEncode({'sessionId': sessionId}),
     );
-    return jsonDecode(res.body);
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } else {
+      final err = jsonDecode(res.body);
+      throw err['message'] ?? res.body;
+    }
   }
 
 

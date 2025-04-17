@@ -1,5 +1,3 @@
-// lib/screens/multiplayer_host_lobby_screen.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,7 +6,7 @@ import '../services/auth_service.dart';
 import 'vote_results_screen.dart';
 
 class MultiplayerHostLobbyScreen extends StatefulWidget {
-  final Map<String, dynamic> dimensionData;
+  final Map<String, dynamic> dimensionData;      // not used here now
   final String sessionId;
   final String joinCode;
   final Map<int, Map<String, dynamic>> playersMap;
@@ -29,13 +27,13 @@ class MultiplayerHostLobbyScreen extends StatefulWidget {
 class _MultiplayerHostLobbyScreenState
     extends State<MultiplayerHostLobbyScreen> {
   late Map<int, Map<String, dynamic>> _playersMap;
-  bool _isResolving = false;
-  bool _hasResolved = false;
-  late String _currentUserId;
-  Timer? _pollTimer;
+  final StoryService  _storyService = StoryService();
+  final AuthService   _authService  = AuthService();
 
-  final StoryService _storyService = StoryService();
-  final AuthService _authService = AuthService();
+  late final String _currentUserId;
+  Timer? _pollTimer;
+  bool _isResolving = false;
+  bool _hasNavigatedToResults = false;
 
   bool get _isHost => _playersMap[1]?['userId'] == _currentUserId;
 
@@ -44,8 +42,9 @@ class _MultiplayerHostLobbyScreenState
     super.initState();
     _currentUserId = _authService.getCurrentUser()?.uid ?? '';
     _playersMap = Map.of(widget.playersMap);
+
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _pollForLobbyUpdates();
+      _pollLobby();
     });
   }
 
@@ -55,42 +54,36 @@ class _MultiplayerHostLobbyScreenState
     super.dispose();
   }
 
-  Future<void> _pollForLobbyUpdates() async {
-    try {
-      final updated = await _storyService.fetchLobbyState(widget.sessionId);
+  /* ---------------------------------- polling ---------------------------------- */
 
-      // If server has resolved votes, navigate everyone once:
-      if (!_hasResolved && updated.containsKey('resolvedDimensions')) {
-        _hasResolved = true;
-        final resolved = Map<String, String>.from(updated['resolvedDimensions']);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VoteResultsScreen(
-              resolvedResults: resolved,  // <-- fixed
-            ),
-          ),
-        );
-        return;
+  Future<void> _pollLobby() async {
+    try {
+      final data = await _storyService.fetchLobbyState(widget.sessionId);
+
+      /* 1. Vote resolution */
+      if (data['votesResolved'] == true && !_hasNavigatedToResults) {
+        _hasNavigatedToResults = true;
+        final resolved = Map<String, String>.from(data['resolvedDimensions']);
+        _goToResults(resolved);
+        return; // stop further handling in this tick
       }
 
-      // Otherwise update the players list
-      final rawPlayers = updated['players'] as Map<String, dynamic>? ?? {};
+      /* 2. Player list update */
+      final rawPlayers = data['players'] as Map<String, dynamic>? ?? {};
       final newMap = rawPlayers.map<int, Map<String, dynamic>>(
             (k, v) => MapEntry(int.parse(k), Map<String, dynamic>.from(v)),
       );
-      if (_didPlayerListChange(_playersMap, newMap)) {
+      if (_playersChanged(_playersMap, newMap)) {
         setState(() => _playersMap = newMap);
       }
     } catch (e) {
-      debugPrint('Polling error: $e');
+      debugPrint('Lobby polling error: $e');
     }
   }
 
-  bool _didPlayerListChange(
+  bool _playersChanged(
       Map<int, Map<String, dynamic>> oldP,
-      Map<int, Map<String, dynamic>> newP,
-      ) {
+      Map<int, Map<String, dynamic>> newP) {
     if (oldP.length != newP.length) return true;
     for (final slot in newP.keys) {
       final o = oldP[slot], n = newP[slot];
@@ -103,6 +96,8 @@ class _MultiplayerHostLobbyScreenState
     return false;
   }
 
+  /* ---------------------------- host: resolve votes ---------------------------- */
+
   Future<void> _startGroupStory() async {
     if (_playersMap.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,16 +109,9 @@ class _MultiplayerHostLobbyScreenState
 
     try {
       final result = await _storyService.resolveVotes(widget.sessionId);
-      final resolved = Map<String, String>.from(result['resolvedDimensions']);
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => VoteResultsScreen(
-            resolvedResults: resolved,  // <-- fixed
-          ),
-        ),
-      );
+      final resolved =
+      Map<String, String>.from(result['resolvedDimensions']);
+      _goToResults(resolved);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to start: $e")),
@@ -133,7 +121,29 @@ class _MultiplayerHostLobbyScreenState
     }
   }
 
-  Future<String?> _showChangeNameDialog() {
+  void _goToResults(Map<String, String> resolved) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VoteResultsScreen(resolvedResults: resolved),
+      ),
+    );
+  }
+
+  /* ------------------------------ name change UI ------------------------------ */
+
+  Future<void> _updateMyName(String newName) async {
+    try {
+      await _storyService.updatePlayerName({'newDisplayName': newName});
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Name updated.")));
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  Future<String?> _askForName() {
     String tmp = '';
     return showDialog<String>(
       context: context,
@@ -142,7 +152,8 @@ class _MultiplayerHostLobbyScreenState
         content: TextField(
           autofocus: true,
           onChanged: (v) => tmp = v,
-          decoration: const InputDecoration(hintText: "New display name"),
+          decoration:
+          const InputDecoration(hintText: "Enter new display name"),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
@@ -152,47 +163,37 @@ class _MultiplayerHostLobbyScreenState
     );
   }
 
-  Future<void> _updateMyName(String newName) async {
-    try {
-      await _storyService.updatePlayerName({'newDisplayName': newName});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Name updated.")),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    }
-  }
+  /* --------------------------------- UI build --------------------------------- */
 
-  List<Widget> _buildPlayerTiles() {
+  List<Widget> _playerTiles() {
     final slots = _playersMap.keys.toList()..sort();
-    return slots.map((s) {
-      final p = _playersMap[s]!;
-      return ListTile(
-        leading: Text("$s", style: GoogleFonts.atma(fontSize: 16)),
-        title: Text("${p['displayName']} (${p['userId']})", style: GoogleFonts.atma()),
-        trailing: p['userId'] == _currentUserId
-            ? IconButton(
-          icon: const Icon(Icons.edit),
-          onPressed: () async {
-            final n = await _showChangeNameDialog();
-            if (n != null && n.trim().isNotEmpty) {
-              await _updateMyName(n.trim());
-            }
-          },
+    return [
+      for (final s in slots)
+        ListTile(
+          leading: Text("$s", style: GoogleFonts.atma(fontSize: 16)),
+          title: Text(
+            "${_playersMap[s]!['displayName']} (${_playersMap[s]!['userId']})",
+            style: GoogleFonts.atma(),
+          ),
+          trailing: _playersMap[s]!['userId'] == _currentUserId
+              ? IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () async {
+              final n = await _askForName();
+              if (n != null && n.trim().isNotEmpty) {
+                await _updateMyName(n.trim());
+              }
+            },
+          )
+              : null,
         )
-            : null,
-      );
-    }).toList();
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Host Lobby", style: GoogleFonts.atma()),
-      ),
+      appBar: AppBar(title: Text("Host Lobby", style: GoogleFonts.atma())),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -203,7 +204,7 @@ class _MultiplayerHostLobbyScreenState
             const SizedBox(height: 16),
             Text("Players in Lobby:", style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Expanded(child: ListView(children: _buildPlayerTiles())),
+            Expanded(child: ListView(children: _playerTiles())),
             if (_isHost) ...[
               const SizedBox(height: 16),
               ElevatedButton(
