@@ -31,13 +31,13 @@ class HomeScreen extends StatelessWidget {
   void _navigateToNewStoryWithMode(BuildContext context, bool isGroup) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => CreateNewStoryScreen(isGroup: isGroup)),
+      MaterialPageRoute(
+        builder: (context) => CreateNewStoryScreen(isGroup: isGroup),
+      ),
     );
   }
 
   /// Navigate to continue an active story, passing `isGroup`.
-  /// For now, the logic might be the same for solo or group,
-  /// but you’ll eventually expand or adapt for group logic.
   void _navigateToActiveStoryWithMode(BuildContext context, bool isGroup) async {
     final storyService = StoryService();
     try {
@@ -56,14 +56,20 @@ class HomeScreen extends StatelessWidget {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("No active story found.", style: GoogleFonts.atma()),
+            content: Text(
+              "No active story found.",
+              style: GoogleFonts.atma(),
+            ),
           ),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Error resuming active story: $e", style: GoogleFonts.atma()),
+          content: Text(
+            "Error resuming active story: $e",
+            style: GoogleFonts.atma(),
+          ),
         ),
       );
     }
@@ -87,6 +93,7 @@ class HomeScreen extends StatelessWidget {
       },
     );
   }
+
   /// Navigate to the multiplayer join screen.
   void _navigateToJoinFriend(BuildContext context) {
     Navigator.push(
@@ -94,7 +101,6 @@ class HomeScreen extends StatelessWidget {
       MaterialPageRoute(builder: (_) => const JoinMultiplayerScreen()),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +114,7 @@ class HomeScreen extends StatelessWidget {
         return Scaffold(
           body: Stack(
             children: [
-              // Background
+              // Background image
               Positioned.fill(
                 child: Container(
                   decoration: const BoxDecoration(
@@ -121,6 +127,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
+              // Main content
               Positioned.fill(
                 child: SingleChildScrollView(
                   child: Container(
@@ -129,6 +136,7 @@ class HomeScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(height: 80),
+
                         // Title
                         Text(
                           "VersaTale",
@@ -190,7 +198,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
-              // Logout button top-left
+              // Logout button
               Positioned(
                 top: 20,
                 left: 16,

@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io'; // Needed to catch SocketException.
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'lobby_rtdb_service.dart';
 
 class StoryService {
   // Replace with your actual backend URL.
   final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";
   final AuthService authService = AuthService();
+
+/*─────────────────────────  S O L O  +  S T O R Y  ─────────────────────────*/
 
   Future<Map<String, dynamic>> startStory({
     required String decision,
@@ -16,100 +19,56 @@ class StoryService {
     required String storyLength,
   }) async {
     final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
+    if (token == null) throw "User is not authenticated.";
+
+    final res = await http.post(
+      Uri.parse("$backendUrl/start_story"),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type':  'application/json',
+      },
+      body: jsonEncode({
+        "decision"    : decision,
+        "dimensions"  : dimensionData,
+        "maxLegs"     : maxLegs,
+        "optionCount" : optionCount,
+        "storyLength" : storyLength,
+      }),
+    );
+
+    if (res.statusCode == 200) {
+      final d = jsonDecode(res.body);
+      return {
+        "storyLeg"  : d["aiResponse"]["storyLeg"]  ?? "No story leg returned.",
+        "options"   : d["aiResponse"]["options"]   ?? [],
+        "storyTitle": d["aiResponse"]["storyTitle"]?? "Untitled Story",
+      };
     }
-    final url = Uri.parse("$backendUrl/start_story");
-    final payload = jsonEncode({
-      "decision": decision,
-      "dimensions": dimensionData,
-      "maxLegs": maxLegs,
-      "optionCount": optionCount,
-      "storyLength": storyLength,
-    });
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          "storyLeg": data["aiResponse"]["storyLeg"] ?? "No story leg returned.",
-          "options": data["aiResponse"]["options"] ?? [],
-          "storyTitle": data["aiResponse"]["storyTitle"] ?? "Untitled Story",
-        };
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    throw jsonDecode(res.body)["message"] ?? res.body;
   }
 
   Future<Map<String, dynamic>> getNextLeg({required String decision}) async {
     final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
+    if (token == null) throw "User is not authenticated.";
+
+    final res = await http.post(
+      Uri.parse("$backendUrl/next_leg"),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type':  'application/json',
+      },
+      body: jsonEncode({"decision": decision}),
+    );
+
+    if (res.statusCode == 200) {
+      final d = jsonDecode(res.body);
+      return {
+        "storyLeg"  : d["aiResponse"]["storyLeg"]  ?? "No story leg returned.",
+        "options"   : d["aiResponse"]["options"]   ?? [],
+        "storyTitle": d["aiResponse"]["storyTitle"]?? "Untitled Story",
+      };
     }
-    final url = Uri.parse("$backendUrl/next_leg");
-    final payload = jsonEncode({
-      "decision": decision,
-    });
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          "storyLeg": data["aiResponse"]["storyLeg"] ?? "No story leg returned.",
-          "options": data["aiResponse"]["options"] ?? [],
-          "storyTitle": data["aiResponse"]["storyTitle"] ?? "Untitled Story",
-        };
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    throw jsonDecode(res.body)["message"] ?? res.body;
   }
 
   Future<Map<String, dynamic>> saveStory() async {
@@ -621,285 +580,67 @@ class StoryService {
     }
   }
 
+/*───────────────────────  M U L T I P L A Y E R  ──────────────────────────*/
 
-
-
-
-  /// Creates a new multiplayer session by sending dimension data to the backend.
-  /// The backend should generate a join code and create the session, then return:
-  /// { "joinCode": ..., "sessionId": ..., "storyState": ... }
-  Future<Map<String, dynamic>> createMultiplayerSession({
-    required Map<String, dynamic> dimensionData,
-  }) async {
+  /// 1️⃣ Host reserves a sessionId + joinCode.
+  Future<Map<String, dynamic>> createMultiplayerSession() async {
     final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
+    if (token == null) throw "User is not authenticated.";
+
+    final res = await http.post(
+      Uri.parse("$backendUrl/create_multiplayer_session"),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type':  'application/json',
+      },
+    );
+
+    if (res.statusCode == 200) {
+      final d = jsonDecode(res.body);
+      return {
+        "sessionId": d["sessionId"],
+        "joinCode" : d["joinCode"],
+      };
     }
-
-    // Adjust the endpoint as needed.
-    final url = Uri.parse("$backendUrl/create_multiplayer_session");
-    final payload = jsonEncode({
-      "dimensions": dimensionData,
-    });
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          "joinCode": data["joinCode"],
-          "sessionId": data["sessionId"],
-          "storyState": data["storyState"] ?? {},
-        };
-      } else {
-        final errorMessage = response.body.isNotEmpty
-            ? response.body
-            : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    throw jsonDecode(res.body)["message"] ?? res.body;
   }
 
-
-
-  /// Submit votes for a session’s story leg.
-  /// This is where you do your tie-break logic as well.
-  Future<Map<String, dynamic>> submitVotes({
-    required String sessionId,
-    required Map<String, String> playerVotes,
-    required String hostTieBreakChoice,
-  }) async {
-    // 1. Tally votes
-    // 2. If tie => use hostTieBreakChoice
-    // 3. Generate next story leg from your AI or rules
-    // 4. Return the updated story state
-    return {
-      "storyLeg": "Some new leg text",
-      "options": ["Option A", "Option B"],
-    };
-  }
-  /// Join an existing multiplayer session by join code.
-  /// Returns the session details, including players and storyState.
+  /// 2️⃣ Joiner validates a join‑code, gets the sessionId back.
   Future<Map<String, dynamic>> joinMultiplayerSession({
     required String joinCode,
     required String displayName,
   }) async {
     final token = await authService.getToken();
     if (token == null) throw "User is not authenticated.";
-    final url = Uri.parse("$backendUrl/join_multiplayer_session");
-
-    final payload = jsonEncode({
-      "joinCode": joinCode,
-      "displayName": displayName,
-    });
-
-    final response = await http.post(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: payload,
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } else {
-      final body = response.body;
-      String msg;
-      try {
-        final data = jsonDecode(body);
-        msg = data['message'] ?? body;
-      } catch (_) {
-        msg = body;
-      }
-      throw msg;
-    }
-  }
-
-
-
-  Future<Map<String, dynamic>> startGroupStory(Map<String, dynamic> payload) async {
-    final token = await authService.getToken();
-    if (token == null) throw "Not authenticated";
-    final url = Uri.parse("$backendUrl/create_multiplayer_session");
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(payload),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          "joinCode": data["joinCode"],
-          "sessionId": data["sessionId"],
-          "storyState": data["storyState"] ?? {},
-          "players": data["players"]  ?? {},
-        };
-      } else {
-        final errorMessage = response.body.isNotEmpty
-            ? response.body
-            : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
-  }
-
-  /* ---------------------------------------------------------------------------
-   *  FETCH LOBBY STATE  – returns the entire JSON from /lobby_state
-   * ------------------------------------------------------------------------ */
-  Future<Map<String, dynamic>> fetchLobbyState(String sessionId) async {
-    final token = await authService.getToken();
-    if (token == null) throw "User is not authenticated.";
-
-    final res = await http.get(
-      Uri.parse('$backendUrl/lobby_state?sessionId=$sessionId'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    } else {
-      final err = jsonDecode(res.body);
-      throw err['message'] ?? res.body;
-    }
-  }
-  Future<Map<String, dynamic>> updatePlayerName(Map<String, dynamic> payload) async {
-    final token = await authService.getToken();
-    if (token == null) throw "Not authenticated";
-    final url = Uri.parse("$backendUrl/update_player_name");
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(payload),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          "joinCode": data["joinCode"],
-          "sessionId": data["sessionId"],
-          "storyState": data["storyState"] ?? {},
-          "players": data["players"]  ?? {},
-        };
-      } else {
-        final errorMessage = response.body.isNotEmpty
-            ? response.body
-            : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
-  }
-
-  Future<Map<String, dynamic>> submitVote(Map<String, String> vote) async {
-    final token = await authService.getToken();
-    if (token == null) throw "Not authenticated";
-    final response = await http.post(
-      Uri.parse('$backendUrl/submit_vote'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'vote': vote}),
-    );
-    if (response.statusCode != 200) {
-      final err = jsonDecode(response.body);
-      throw Exception(err['message'] ?? 'Failed to submit vote');
-    }
-    return jsonDecode(response.body);
-  }
-
-  /* ---------------------------------------------------------------------------
-   *  HOST‑ONLY  – resolve votes, server returns {resolvedDimensions:{...}}
-   * ------------------------------------------------------------------------ */
-  Future<Map<String, dynamic>> resolveVotes(String sessionId) async {
-    final token = await authService.getToken();
-    if (token == null) throw "User is not authenticated.";
 
     final res = await http.post(
-      Uri.parse('$backendUrl/resolve_votes'),
+      Uri.parse("$backendUrl/join_multiplayer_session"),
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
+        'Content-Type':  'application/json',
       },
-      body: jsonEncode({'sessionId': sessionId}),
+      body: jsonEncode({"joinCode": joinCode, "displayName": displayName}),
     );
 
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    } else {
-      final err = jsonDecode(res.body);
-      throw err['message'] ?? res.body;
-    }
+    if (res.statusCode == 200) return jsonDecode(res.body);
+    throw jsonDecode(res.body)["message"] ?? res.body;
   }
 
-
-
-
+  /// 3️⃣ Host calls this *after* votes resolved to get first story leg.
+  Future<Map<String, dynamic>> startStoryForMultiplayer({
+    required Map<String, dynamic> resolvedDimensions,
+    required int maxLegs,
+    required int optionCount,
+    required String storyLength,
+  }) async {
+    return startStory(
+      decision      : "Start Story",
+      dimensionData : resolvedDimensions,
+      maxLegs       : maxLegs,
+      optionCount   : optionCount,
+      storyLength   : storyLength,
+    );
+  }
 
 
 
