@@ -198,6 +198,7 @@ class _MultiplayerHostLobbyScreenState
           initialLeg: payload['initialLeg'],
           options:    List<String>.from(payload['options'] ?? []),
           storyTitle: payload['storyTitle'],
+          joinCode:  widget.joinCode,
         ),
       ),
     );
@@ -236,6 +237,7 @@ class _MultiplayerHostLobbyScreenState
         builder: (_) => VoteResultsScreen(
           resolvedResults: resolved,
           sessionId:       widget.sessionId,
+          joinCode:        widget.joinCode,
         ),
       ),
     );
@@ -302,6 +304,18 @@ class _MultiplayerHostLobbyScreenState
               ElevatedButton(
                 onPressed:
                 _isResolving ? null : _goToStoryScreenFromSolo,
+                child: _isResolving
+                    ? const CircularProgressIndicator()
+                    : Text('Go To Story',
+                    style: GoogleFonts.atma(
+                        fontWeight: FontWeight.bold)),
+              ),
+            ],
+            if (widget.fromGroupStory) ...[
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed:
+                _isResolving ? null : _goToStoryScreen,
                 child: _isResolving
                     ? const CircularProgressIndicator()
                     : Text('Go To Story',

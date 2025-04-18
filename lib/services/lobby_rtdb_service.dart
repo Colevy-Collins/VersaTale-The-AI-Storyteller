@@ -290,6 +290,53 @@ class LobbyRtdbService {
     return Map<String, dynamic>.from(payloadSnap.value as Map);
   }
 
+  /// Returns a map of slotIndex → playerData.
+  /// If there are no players (or on error), returns an empty map.
+  Future<Map<int, Map<String, dynamic>>> fetchPlayerList({
+    required String sessionId,
+  }) async {
+    final ref = _lobbyRef(sessionId);
+
+    try {
+      final snapshot = await ref.child('players').get();
+
+      // If nothing there, just return empty
+      if (!snapshot.exists || snapshot.value == null) {
+        return <int, Map<String, dynamic>>{};
+      }
+
+      // Normalize whatever RTDB gave us into a flat String→Map
+      final dynamic raw = snapshot.value;
+      final Map<String, dynamic> flat;
+      if (raw is Map) {
+        flat = Map<String, dynamic>.from(raw);
+      } else if (raw is List) {
+        flat = <String, dynamic>{};
+        for (var i = 0; i < raw.length; i++) {
+          final e = raw[i];
+          if (e is Map) {
+            flat['$i'] = Map<String, dynamic>.from(e);
+          }
+        }
+      } else {
+        // unrecognized shape
+        return <int, Map<String, dynamic>>{};
+      }
+
+      // Parse keys to int and cast values
+      final playersMap = flat.map<int, Map<String, dynamic>>((key, value) {
+        final index = int.parse(key);
+        return MapEntry(index, Map<String, dynamic>.from(value));
+      });
+
+      return playersMap;
+    } catch (err, stack) {
+      // Log it so you can debug later
+      return <int, Map<String, dynamic>>{};
+    }
+  }
+
+
   /// Host: tally all storyVotes, pick a winning choice, clear votes,
   /// and set phase to 'storyVoteResults'. Returns the winner.
   /// Host: tally votes → pick winner → clear votes → push 'storyVoteResults'.

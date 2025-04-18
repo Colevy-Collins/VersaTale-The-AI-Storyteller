@@ -28,7 +28,7 @@ class StoryScreen extends StatefulWidget {
   final List<String> options;
   final String storyTitle;
   final String? sessionId; // null = solo, non‑null = multiplayer
-
+  final String? joinCode;
 
   const StoryScreen({
     Key? key,
@@ -36,6 +36,7 @@ class StoryScreen extends StatefulWidget {
     required this.options,
     required this.storyTitle,
     this.sessionId,
+    this.joinCode,
   }) : super(key: key);
 
   @override
@@ -370,51 +371,74 @@ class _StoryScreenState extends State<StoryScreen> {
   Future<void> _createGroupSession() async {
     setState(() => _loading = true);
     try {
-      // 1) Ask your backend for a fresh sessionId & joinCode
-      final backendRes = await _storySvc.createMultiplayerSession("false");
-      final sessionId  = backendRes['sessionId'] as String;
-      final joinCode   = backendRes['joinCode']  as String;
+      if(!_isMultiplayer) {
+        // 1) Ask your backend for a fresh sessionId & joinCode
+        final backendRes = await _storySvc.createMultiplayerSession("false");
+        final sessionId = backendRes['sessionId'] as String;
+        final joinCode = backendRes['joinCode'] as String;
 
-      // 2) Seed RTDB lobby with host’s random defaults
-      final hostName   = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
-      await _lobbySvc.createSession(
-        sessionId:      sessionId,
-        hostName:       hostName,
-        randomDefaults: {},
-      );
+        // 2) Seed RTDB lobby with host’s random defaults
+        final hostName = FirebaseAuth.instance.currentUser?.displayName ??
+            'Host';
+        await _lobbySvc.createSession(
+          sessionId: sessionId,
+          hostName: hostName,
+          randomDefaults: {},
+        );
 
-      // 3) Immediately broadcast the host’s current solo story into RTDB
-      await _lobbySvc.advanceToStoryPhase(
-        sessionId: sessionId,
-        storyPayload: {
-          'initialLeg': widget.initialLeg,
-          'options'   : widget.options,
-          'storyTitle': widget.storyTitle,
-        },
-      );
+        // 3) Immediately broadcast the host’s current solo story into RTDB
+        await _lobbySvc.advanceToStoryPhase(
+          sessionId: sessionId,
+          storyPayload: {
+            'initialLeg': widget.initialLeg,
+            'options': widget.options,
+            'storyTitle': widget.storyTitle,
+          },
+        );
 
-      // 4) Build minimal playersMap (host only)
-      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-      final playersMap = <int, Map<String, dynamic>>{
-        1: {'displayName': hostName, 'userId': currentUid},
-      };
+        // 4) Build minimal playersMap (host only)
+        final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+        final playersMap = <int, Map<String, dynamic>>{
+          1: {'displayName': hostName, 'userId': currentUid},
+        };
 
-      // 5) Navigate into your multiplayer lobby
-      if (!mounted) return;
-      _lobbySvc.setPhaseTolobby(sessionId: sessionId);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => MultiplayerHostLobbyScreen(
-            sessionId:  sessionId,
-            joinCode:   joinCode,
-            playersMap: playersMap,
-            fromSoloStory: !_isMultiplayer,
-            fromGroupStory: _isMultiplayer,
+        // 5) Navigate into your multiplayer lobby
+        if (!mounted) return;
+        _lobbySvc.setPhaseTolobby(sessionId: sessionId);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                MultiplayerHostLobbyScreen(
+                  sessionId: sessionId,
+                  joinCode: joinCode,
+                  playersMap: playersMap,
+                  fromSoloStory: !_isMultiplayer,
+                  fromGroupStory: _isMultiplayer,
 
+                ),
           ),
-        ),
-      );
+        );
+      } else if(_isMultiplayer){
+
+        final playersMap = await _lobbySvc.fetchPlayerList(sessionId: widget.sessionId!);
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                MultiplayerHostLobbyScreen(
+                  sessionId: widget.sessionId!,
+                  joinCode: widget.joinCode!,
+                  playersMap: playersMap,
+                  fromSoloStory: !_isMultiplayer,
+                  fromGroupStory: _isMultiplayer,
+
+                ),
+          ),
+        );
+
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {

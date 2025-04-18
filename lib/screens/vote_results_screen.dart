@@ -19,11 +19,13 @@ import 'story_screen.dart';
 class VoteResultsScreen extends StatefulWidget {
   final String sessionId;
   final Map<String, String> resolvedResults;
+  final String joinCode;
 
   const VoteResultsScreen({
     Key? key,
     required this.sessionId,
     required this.resolvedResults,
+    required this.joinCode,
   }) : super(key: key);
 
   @override
@@ -94,6 +96,7 @@ class _VoteResultsScreenState extends State<VoteResultsScreen> {
       MaterialPageRoute(
         builder: (_) => StoryScreen(
           sessionId:  widget.sessionId,
+          joinCode:   widget.joinCode,
           initialLeg: payload['initialLeg'] as String,
           options:    List<String>.from(payload['options'] as List<dynamic>),
           storyTitle: payload['storyTitle'] as String,
