@@ -12,6 +12,7 @@
 import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import '../constants/story_tokens.dart';
 
 class LobbyRtdbService {
   final _db   = FirebaseDatabase.instance;
@@ -227,40 +228,6 @@ class LobbyRtdbService {
     await _lobbyRef(sessionId).update({'phase': phase});
   }
 
-  /// Host: tally all storyVotes, pick a winning choice, clear votes,
-  /// and set phase to 'storyVoteResults'. Returns the winner.
-  Future<String> resolveStoryVotes(String sessionId) async {
-    final ref  = _lobbyRef(sessionId);
-    final snap = await ref.get();
-    final data = (snap.value as Map?)?.cast<String, dynamic>() ?? {};
-
-    // Count votes
-    final votes = (data['storyVotes'] as Map?)?.cast<String, dynamic>() ?? {};
-    final counts = <String,int>{};
-    votes.values.forEach((v) {
-      final choice = v.toString();
-      counts[choice] = (counts[choice] ?? 0) + 1;
-    });
-
-    // Determine winner (random tie‑break)
-    final maxCount = counts.values.fold(0, (a, b) => b > a ? b : a);
-    final winners  = counts.entries
-        .where((e) => e.value == maxCount)
-        .map((e) => e.key)
-        .toList();
-    final winner = winners[Random().nextInt(winners.length)];
-
-    // Write result + advance phase
-    await ref.update({
-      'resolvedChoice': winner,
-      'phase':          'storyVoteResults',
-    });
-
-    // Clear votes for next round
-    await ref.child('storyVotes').remove();
-    return winner;
-  }
-
   /// Host: after picking the next leg, broadcast it to everyone.
   Future<void> advanceToStoryPhase({
     required String sessionId,
@@ -271,6 +238,50 @@ class LobbyRtdbService {
       'storyPayload': storyPayload,
       'phase':        'story',
     });
+  }
+
+  /// Host: tally all storyVotes, pick a winning choice, clear votes,
+  /// and set phase to 'storyVoteResults'. Returns the winner.
+  Future<String> resolveStoryVotes(String sessionId) async {
+    final ref  = _lobbyRef(sessionId);
+    final snap = await ref.get();
+    final data = (snap.value as Map?)?.cast<String, dynamic>() ?? {};
+
+    // 1. Count votes
+    final votes   = (data['storyVotes'] as Map?)?.cast<String, dynamic>() ?? {};
+    final counts  = <String,int>{};
+    votes.values.forEach((v) {
+      final choice = v.toString();
+      counts[choice] = (counts[choice] ?? 0) + 1;
+    });
+
+    // 2. Identify top‑vote choices
+    final maxCount = counts.values.fold(0, (a, b) => b > a ? b : a);
+    var   winners  = counts.entries
+        .where((e) => e.value == maxCount)
+        .map((e) => e.key)
+        .toList();
+
+    /* ── 3. Special rule: "<<PREVIOUS_LEG>>" can’t win a tie ───────────── */
+    if (winners.length > 1 && winners.contains(kPreviousLegToken)) {
+      winners.remove(kPreviousLegToken);
+    }
+    if (winners.isEmpty) {
+      // This happens only when previous‑leg was removed from a tie,
+      // so it must have been the sole remaining candidate originally.
+      winners = [kPreviousLegToken];
+    }
+
+    // 4. Pick the winner (random if >1 remaining)
+    final winner = winners[Random().nextInt(winners.length)];
+
+    // 5. Write result & clean up
+    await ref.update({
+      'resolvedChoice': winner,
+      'phase'         : 'storyVoteResults',
+    });
+    await ref.child('storyVotes').remove();      // clear votes
+    return winner;
   }
 
 

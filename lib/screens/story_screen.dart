@@ -1,15 +1,17 @@
+// lib/screens/story_screen.dart
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+
+import '../constants/story_tokens.dart';      // ← kPreviousLegToken
 import '../services/auth_service.dart';
 import '../services/story_service.dart';
 import '../services/lobby_rtdb_service.dart';
 import 'main_splash_screen.dart';
 
-// Menu options
+/* ── App‑bar menu options ─────────────────────────────────────────── */
 enum _MenuOption {
   backToScreen,
   previousLeg,
@@ -19,13 +21,12 @@ enum _MenuOption {
   closeMenu,
 }
 
-/// Unified story screen: solo or multiplayer (voting).
-/// Pass [sessionId] to enable group voting.
+/* ── Story Screen (solo or multiplayer) ───────────────────────────── */
 class StoryScreen extends StatefulWidget {
   final String initialLeg;
   final List<String> options;
   final String storyTitle;
-  final String? sessionId; // null = solo, non-null = multiplayer
+  final String? sessionId; // null = solo, non‑null = multiplayer
 
   const StoryScreen({
     Key? key,
@@ -40,169 +41,284 @@ class StoryScreen extends StatefulWidget {
 }
 
 class _StoryScreenState extends State<StoryScreen> {
-  final AuthService authService    = AuthService();
-  final StoryService storyService  = StoryService();
-  final LobbyRtdbService _lobbySvc = LobbyRtdbService();
+  /* Services */
+  final AuthService       _authSvc  = AuthService();
+  final StoryService      _storySvc = StoryService();
+  final LobbyRtdbService  _lobbySvc = LobbyRtdbService();
 
-  final TextEditingController textController = TextEditingController();
-  final ScrollController _scrollController    = ScrollController();
+  /* Controllers */
+  final TextEditingController _textCtrl   = TextEditingController();
+  final ScrollController      _scrollCtrl = ScrollController();
   StreamSubscription<DatabaseEvent>? _lobbySub;
 
-  late List<String> currentOptions;
-  String _storyTitle           = "Interactive Story";
-  String _phase                = 'story';
-  bool   _isRequestInProgress  = false;
-  Map<String, dynamic> _players = {};
+  /* State */
+  late List<String> _currentOptions;
+  String _storyTitle = 'Interactive Story';
+  String _phase      = 'story';   // story | storyVote | storyVoteResults
+  bool   _busy       = false;
+  Map<String,dynamic> _players = {};
 
-  bool get isMultiplayer => widget.sessionId != null;
-  bool get isHost {
-    final info = _players['1'];
-    return info is Map && info['userId'] == FirebaseAuth.instance.currentUser?.uid;
+  /* Convenience */
+  bool get _isMultiplayer => widget.sessionId != null;
+  bool get _isHost {
+    final slot1 = _players['1'];
+    return slot1 is Map &&
+        slot1['userId'] == FirebaseAuth.instance.currentUser?.uid;
   }
 
+  /* ── Lifecycle ─────────────────────────────────────────────────── */
   @override
   void initState() {
     super.initState();
-    textController.text   = widget.initialLeg;
-    currentOptions        = widget.options;
-    _storyTitle           = widget.storyTitle;
+    _textCtrl.text  = widget.initialLeg;
+    _currentOptions = widget.options;
+    _storyTitle     = widget.storyTitle;
 
-    if (isMultiplayer) {
+    if (_isMultiplayer) {
       _lobbySub = _lobbySvc
           .lobbyStream(widget.sessionId!)
           .listen(_onLobbyUpdate);
     }
   }
 
-  void _onLobbyUpdate(DatabaseEvent event) {
-    final root = (event.snapshot.value as Map?)?.cast<dynamic, dynamic>() ?? {};
+  @override
+  void dispose() {
+    _lobbySub?.cancel();
+    _textCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
 
-    /* ── 1.  Normalize the players node ─────────────────────────────────── */
-    _players = _normalizePlayers(root['players']);
-
-    /* ── 2.  Phase change detection ─────────────────────────────────────── */
-    final newPhase = root['phase']?.toString() ?? 'story';
-    if (newPhase != _phase) {
-      setState(() => _phase = newPhase);
-    }
-
-    /* ── 3.  Auto‑resolve if host and everyone has voted ────────────────── */
-    if (_phase == 'storyVote' && isHost && !_isRequestInProgress) {
-      final voteCount   = _normalizePlayers(root['storyVotes']).length;
-      final playerCount = _players.length;
-      if (playerCount > 0 && voteCount >= playerCount) {
-        _resolveAndAdvance();   // tally + broadcast
-      }
-    }
-
-    /* ── 4.  When new story arrives, update UI ──────────────────────────── */
-    if (_phase == 'story' && root['storyPayload'] != null) {
-      final payload = (root['storyPayload'] as Map).cast<String, dynamic>();
-      setState(() {
-        textController.text = payload['initialLeg'] as String;
-        currentOptions      = List<String>.from(payload['options'] as List);
-        _storyTitle         = payload['storyTitle'] as String;
-      });
-      _scrollController.jumpTo(0.0);
+  /* ── Force‑close any modal (bottom‑sheet, dialog, menu) ──────────── */
+  void _closeAnyOptionSheet() {
+    // Keep popping routes until the page route is current again
+    while (ModalRoute.of(context)?.isCurrent == false) {
+      Navigator.of(context, rootNavigator: true).pop();
     }
   }
 
-  /// Convert the raw `players` node (Map OR List) into a
-  /// canonical Map<String,dynamic> whose keys are the slot numbers.
-  Map<String, dynamic> _normalizePlayers(dynamic raw) {
-    final Map<String, dynamic> out = {};
+/* ── RTDB listener ─────────────────────────────────────────────── */
+  void _onLobbyUpdate(DatabaseEvent event) {
+    final root = (event.snapshot.value as Map?)?.cast<dynamic,dynamic>() ?? {};
+
+    // 1. players
+    _players = _normalizePlayers(root['players']);
+
+    // 2. phase change handling
+    final newPhase = root['phase']?.toString() ?? 'story';
+
+    // ✱ If the lobby just entered voting or vote‑results, close any modal
+    final phaseChanged = newPhase != _phase;
+    final enteredVotePhase =
+        phaseChanged && (newPhase == 'storyVote' || newPhase == 'storyVoteResults');
+    if (enteredVotePhase) _closeAnyOptionSheet();
+
+    if (phaseChanged) setState(() => _phase = newPhase);
+
+    // 3. host auto‑resolve
+    if (_phase == 'storyVote' && _isHost && !_busy) {
+      final voteCount   = _normalizePlayers(root['storyVotes']).length;
+      final playerCount = _players.length;
+      if (playerCount > 0 && voteCount >= playerCount) {
+        _resolveAndAdvance();
+      }
+    }
+
+    // 4. story payload update
+    if (_phase == 'story' && root['storyPayload'] != null) {
+      final p = (root['storyPayload'] as Map).cast<String,dynamic>();
+      setState(() {
+        _textCtrl.text   = p['initialLeg'] as String;
+        _currentOptions  = List<String>.from(p['options'] as List);
+        _storyTitle      = p['storyTitle'] as String;
+      });
+      _scrollCtrl.jumpTo(0);
+    }
+  }
+
+  /* ── Helpers ───────────────────────────────────────────────────── */
+  Map<String,dynamic> _normalizePlayers(dynamic raw) {
+    final out = <String,dynamic>{};
     if (raw is Map) {
-      raw.forEach((k, v) => out[k.toString()] = v);
+      raw.forEach((k,v)=>out[k.toString()] = v);
     } else if (raw is List) {
       for (var i = 0; i < raw.length; i++) {
-        final entry = raw[i];
-        if (entry is Map) out['$i'] = entry;
+        final e = raw[i];
+        if (e is Map) out['$i'] = e;
       }
     }
     return out;
   }
 
-  /// Submit or overwrite your vote
+  Future<void> _rollbackToStoryPhase() async {
+    if (mounted) setState(() => _phase = 'story');
+    if (_isMultiplayer) {
+      try {
+        await _lobbySvc.updatePhase(
+          sessionId: widget.sessionId!,
+          phase: 'story',
+        );
+      } catch (_) {/* ignore */}
+    }
+  }
+
+  Future<void> _maybeAutoResolve() async {
+    if (!_isHost || widget.sessionId == null) return;
+    final ref  = FirebaseDatabase.instance.ref('lobbies/${widget.sessionId}');
+    final snap = await ref.get();
+    final raw  = snap.value;
+    if (raw is! Map) return;
+
+    final players = _normalizePlayers(raw['players']);
+    final votes   = _normalizePlayers(raw['storyVotes']);
+    final phase   = raw['phase']?.toString() ?? '';
+
+    if (phase == 'storyVote' &&
+        players.isNotEmpty &&
+        votes.length >= players.length) {
+      await _resolveAndAdvance();
+    }
+  }
+
+  void _showError(String msg) => _showSnack(msg, isError: true);
+  void _showSnack(String msg, {bool isError = false}) =>
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg, style: GoogleFonts.atma()),
+          backgroundColor: isError ? Colors.red : null,
+        ),
+      );
+
+  /* ── Story navigation (solo) ───────────────────────────────────── */
+  Future<void> _soloPreviousLeg() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final r = await _storySvc.getPreviousLeg();
+      _textCtrl.text  = r['storyLeg'] ?? 'No leg returned.';
+      _currentOptions = List<String>.from(r['options'] ?? []);
+      if (r.containsKey('storyTitle')) _storyTitle = r['storyTitle'];
+    } catch (e) {
+      _showError('$e');
+    } finally {
+      setState(()=>_busy=false);
+      _scrollCtrl.jumpTo(0);
+    }
+  }
+
+  /* ── Voting helpers ────────────────────────────────────────────── */
   Future<void> _submitVote(String choice) async {
-    setState(() => _isRequestInProgress = true);
+    setState(() => _busy = true);
     try {
       await _lobbySvc.submitStoryVote(
         sessionId: widget.sessionId!,
         vote: choice,
       );
+      await _maybeAutoResolve();
     } catch (e) {
-      showErrorDialog(context, '$e');
+      _showError('$e');
     } finally {
-      setState(() => _isRequestInProgress = false);
+      setState(() => _busy = false);
     }
   }
 
-  /// Host tally & broadcast next leg
   Future<void> _resolveAndAdvance() async {
-    setState(() => _isRequestInProgress = true);
+    _closeAnyOptionSheet();
+    setState(() => _busy = true);
     try {
-      final winner = await _lobbySvc.resolveStoryVotes(widget.sessionId!);
-      final res    = await storyService.getNextLeg(decision: winner);
-      await _lobbySvc.advanceToStoryPhase(
+      /* 1️⃣  broadcast 'storyVoteResults' so everybody locks UI */
+      await _lobbySvc.updatePhase(
         sessionId: widget.sessionId!,
-        storyPayload: {
-          'initialLeg': res['storyLeg'],
-          'options':    List<String>.from(res['options'] ?? []),
-          'storyTitle': res['storyTitle'],
-        },
+        phase: 'storyVoteResults',
       );
-    } catch (e) {
-      showErrorDialog(context, '$e');
-    } finally {
-      setState(() => _isRequestInProgress = false);
-    }
-  }
 
-  /// “Previous Leg” confirmation
-  Future<void> _confirmAndGoBack() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text("Warning", style: GoogleFonts.atma()),
-        content: Text(
-          "If you go back and then choose the same option, the next leg may be different. Continue?",
-          style: GoogleFonts.atma(),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Cancel", style: GoogleFonts.atma())),
-          TextButton(onPressed: () => Navigator.pop(context, true),  child: Text("Continue", style: GoogleFonts.atma())),
-        ],
-      ),
-    );
-    if (ok == true) {
-      if (isMultiplayer) {
-        await _submitVote('<<PREVIOUS_LEG>>');
+      /* 2️⃣  decide winner */
+      final winner = await _lobbySvc.resolveStoryVotes(widget.sessionId!);
+
+      /* 3️⃣  advance story */
+      if (winner == kPreviousLegToken) {
+        final prev = await _storySvc.getPreviousLeg();
+        await _lobbySvc.advanceToStoryPhase(
+          sessionId: widget.sessionId!,
+          storyPayload: {
+            'initialLeg': prev['storyLeg'],
+            'options'   : List<String>.from(prev['options'] ?? []),
+            'storyTitle': prev['storyTitle'],
+          },
+        );
       } else {
-        _soloPreviousLeg();
+        final next = await _storySvc.getNextLeg(decision: winner);
+        await _lobbySvc.advanceToStoryPhase(
+          sessionId: widget.sessionId!,
+          storyPayload: {
+            'initialLeg': next['storyLeg'],
+            'options'   : List<String>.from(next['options'] ?? []),
+            'storyTitle': next['storyTitle'],
+          },
+        );
       }
+    } catch (e) {
+      _showError('$e');
+      await _rollbackToStoryPhase();
+    } finally {
+      setState(() => _busy = false);
     }
   }
 
-  /// Solo “Previous Leg”
-  Future<void> _soloPreviousLeg() async {
-    if (_isRequestInProgress) return;
-    setState(() => _isRequestInProgress = true);
+  /* ── Next‑action tap handler ───────────────────────────────────── */
+  Future<void> _onNextSelected(String decision) async {
+    _closeAnyOptionSheet();
+    // Multiplayer – first vote
+    if (_isMultiplayer && _phase == 'story') {
+      setState(()=>_busy=true);
+      try {
+        await Future.wait([
+          _lobbySvc.updatePhase(
+            sessionId: widget.sessionId!,
+            phase: 'storyVote',
+          ),
+          _lobbySvc.submitStoryVote(
+            sessionId: widget.sessionId!,
+            vote: decision,
+          ),
+        ]);
+        await _maybeAutoResolve();
+      } catch (e) {
+        _showError('$e');
+        await _rollbackToStoryPhase();
+      } finally {
+        setState(()=>_busy=false);
+      }
+      return;
+    }
+
+    // Multiplayer – change existing vote
+    if (_isMultiplayer && _phase == 'storyVote') {
+      await _submitVote(decision);
+      return;
+    }
+
+    // Solo
+    setState(()=>_busy=true);
     try {
-      final resp = await storyService.getPreviousLeg();
-      textController.text    = resp['storyLeg'] ?? 'No story leg returned.';
-      currentOptions         = List<String>.from(resp['options'] ?? []);
+      final resp = (decision == kPreviousLegToken)
+          ? await _storySvc.getPreviousLeg()
+          : await _storySvc.getNextLeg(decision: decision);
+
+      _textCtrl.text  = resp['storyLeg'] ?? 'No leg returned.';
+      _currentOptions = List<String>.from(resp['options'] ?? []);
       if (resp.containsKey('storyTitle')) _storyTitle = resp['storyTitle'];
     } catch (e) {
-      showErrorDialog(context, '$e');
+      _showError('$e');
     } finally {
-      setState(() => _isRequestInProgress = false);
-      _scrollController.jumpTo(0.0);
+      setState(()=>_busy=false);
+      _scrollCtrl.jumpTo(0);
     }
   }
 
-  /// Dispatch menu actions
-  Future<void> _onMenuSelected(_MenuOption opt) async {
-    switch (opt) {
+  /* ── Menu actions ──────────────────────────────────────────────── */
+  Future<void> _onMenuSelected(_MenuOption m) async {
+    switch (m) {
       case _MenuOption.backToScreen:
         Navigator.pop(context);
         break;
@@ -216,181 +332,151 @@ class _StoryScreenState extends State<StoryScreen> {
         _saveStory();
         break;
       case _MenuOption.logout:
-        await authService.signOut();
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainSplashScreen()));
+        await _authSvc.signOut();
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (_) => MainSplashScreen()));
         break;
       case _MenuOption.closeMenu:
         break;
     }
   }
 
-  /// Show full story dialog
+  /* ── Confirm “previous leg” ────────────────────────────────────── */
+  Future<void> _confirmAndGoBack() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Warning', style: GoogleFonts.atma()),
+        content: Text(
+          'If you go back and then choose the same option, '
+              'the next leg may differ. Continue?',
+          style: GoogleFonts.atma(),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel', style: GoogleFonts.atma()),
+            onPressed: ()=>Navigator.pop(context,false),
+          ),
+          TextButton(
+            child: Text('Continue', style: GoogleFonts.atma()),
+            onPressed: ()=>Navigator.pop(context,true),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    if (_isMultiplayer) {
+      await _onNextSelected(kPreviousLegToken);
+    } else {
+      await _soloPreviousLeg();
+    }
+  }
+
+  /* ── Full story dialog / save story helpers ────────────────────── */
+/* ── Full‑story dialog launcher ─────────────────────────────────── */
   void _showFullStory() async {
     try {
-      final resp = await storyService.getFullStory();
-      final full = resp['initialLeg'] ?? 'Your story will appear here';
-      final opts = List<String>.from(resp['options'] ?? []);
+      final r = await _storySvc.getFullStory(
+        // non‑host players in multiplayer can only read; host can pass null
+        sessionId: _isMultiplayer && !_isHost ? widget.sessionId : null,
+      );
+
+      final txt = r['initialLeg'] ?? 'Story will appear here.';
+      final ops = List<String>.from(r['options'] ?? []);
+
+      // Re‑use the same “can pick” test as the main button
+      final canPick = !_busy && (_phase == 'story' || _phase == 'storyVote');
+
       showDialog(
         context: context,
-        builder: (_) => FullStoryDialog(
-          fullStory: full,
-          dialogOptions: opts,
+        builder: (_) => _FullStoryDialog(
+          fullStory       : txt,
+          dialogOptions   : ops,
+          canPick         : canPick,           // ← NEW
           onOptionSelected: (opt) {
-            Navigator.pop(context);
-            _onNextSelected(opt);
+            Navigator.pop(context);            // close dialog
+            _onNextSelected(opt);              // act on choice
+          },
+          onShowOptions: () {
+            Navigator.pop(context);            // close dialog
+            _showOptionSheet(context);         // open bottom‑sheet
           },
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      _showSnack('$e');
     }
   }
-
-  /// Save story
   void _saveStory() async {
     try {
-      final resp = await storyService.saveStory();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(resp['message'] ?? 'Story saved successfully.', style: GoogleFonts.atma()),
-        ),
+      final r = await _storySvc.saveStory(
+        sessionId: _isMultiplayer && !_isHost ? widget.sessionId : null,
       );
+      _showSnack(r['message'] ?? 'Story saved.');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e', style: GoogleFonts.atma())));
+      _showSnack('$e');
     }
   }
 
-  /// Handle “Next” or voting
-  void _onNextSelected(String decision) async {
-    // Multiplayer: first tap writes vote+phase
-    if (isMultiplayer && _phase == 'story') {
-      setState(() => _isRequestInProgress = true);
-      try {
-        await Future.wait([
-          _lobbySvc.updatePhase(sessionId: widget.sessionId!, phase: 'storyVote'),
-          _lobbySvc.submitStoryVote(sessionId: widget.sessionId!, vote: decision),
-        ]);
-      } catch (e) {
-        showErrorDialog(context, '$e');
-      } finally {
-        setState(() => _isRequestInProgress = false);
-      }
-      return;
-    }
-
-    // Multiplayer: if already in vote phase, let them change vote
-    if (isMultiplayer && _phase == 'storyVote') {
-      await _submitVote(decision);
-      return;
-    }
-
-    // Solo flow
-    setState(() => _isRequestInProgress = true);
-    try {
-      final resp = await storyService.getNextLeg(decision: decision);
-      textController.text    = resp['storyLeg'] ?? 'No story leg returned.';
-      currentOptions         = List<String>.from(resp['options'] ?? []);
-      if (resp.containsKey('storyTitle')) _storyTitle = resp['storyTitle'];
-    } catch (e) {
-      showErrorDialog(context, '$e');
-    } finally {
-      setState(() => _isRequestInProgress = false);
-      _scrollController.jumpTo(0.0);
-    }
-  }
-
+  /* ── Build UI ──────────────────────────────────────────────────── */
   @override
-  void dispose() {
-    _lobbySub?.cancel();
-    textController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
+  Widget build(BuildContext ctx) {
+    final _canPick =
+        !_busy && (_phase == 'story' || _phase == 'storyVote');
 
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: Colors.white.withOpacity(0.7),
-        elevation: 8,
-        centerTitle: true,
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(_storyTitle, style: GoogleFonts.atma(fontWeight: FontWeight.bold, color: Colors.black)),
-        ),
-        actions: [
-          PopupMenuButton<_MenuOption>(
-            icon: const Icon(Icons.menu, color: Colors.black),
-            onSelected: _onMenuSelected,
-            itemBuilder: (_) => [
-              PopupMenuItem(value: _MenuOption.backToScreen, child: Text('Back a Screen', style: GoogleFonts.atma())),
-              PopupMenuItem(value: _MenuOption.previousLeg,   child: Text('Previous Leg',    style: GoogleFonts.atma())),
-              PopupMenuItem(value: _MenuOption.viewFullStory, child: Text('View Full Story', style: GoogleFonts.atma())),
-              PopupMenuItem(value: _MenuOption.saveStory,     child: Text('Save Story',      style: GoogleFonts.atma())),
-              PopupMenuItem(value: _MenuOption.logout,        child: Text('Logout',          style: GoogleFonts.atma())),
-              PopupMenuItem(value: _MenuOption.closeMenu,     child: Text('Close Menu',      style: GoogleFonts.atma())),
-            ],
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(),
       body: LayoutBuilder(
-        builder: (_, __) => Center(
+        builder: (_,__) => Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 800),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Scrollbar(
-                        controller: _scrollController,
-                        child: SingleChildScrollView(
-                          controller: _scrollController,
-                          child: TextField(
-                            controller: textController,
-                            maxLines: null,
-                            readOnly: true,
-                            decoration: const InputDecoration.collapsed(hintText: "Story will appear here..."),
-                            style: GoogleFonts.atma(),
-                          ),
-                        ),
+                  _buildStoryBox(),
+                  const SizedBox(height:20),
+
+                  /* Choose button */
+                  ElevatedButton(
+                    onPressed: _canPick ? () => _showOptionSheet(ctx) : null,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    child: _busy
+                        ? const CircularProgressIndicator()
+                        : Text(
+                      'Choose Next Action',
+                      style: GoogleFonts.atma(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
 
-                  // Solo “Choose Next Action” or first‑tap in multiplayer
-                  if (currentOptions.isNotEmpty && (_phase == 'story' || _phase == 'storyVote'))
-                    ElevatedButton(
-                      onPressed: _isRequestInProgress
-                          ? null
-                          : () => showButtonMenu(context), // <- only opens sheet now
-                      style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                      child: _isRequestInProgress
-                          ? const CircularProgressIndicator()
-                          : Text('Choose Next Action', style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+                  /* Multiplayer vote‑waiting UI */
+                  if (_isMultiplayer && _phase == 'storyVote') ...[
+                    const SizedBox(height:20),
+                    _busy
+                        ? const CircularProgressIndicator()
+                        : Text(
+                      'Waiting for votes…',
+                      style: GoogleFonts.atma(fontSize:16),
+                      textAlign: TextAlign.center,
                     ),
-
-                  // Multiplayer voting UI
-                  if (isMultiplayer && _phase == 'storyVote') ...[
-                    const SizedBox(height: 20),
-                    if (_isRequestInProgress)
-                      CircularProgressIndicator(),
-                    if (!_isRequestInProgress)
-                      Text('Waiting for votes…', style: GoogleFonts.atma(fontSize: 16), textAlign: TextAlign.center),
-                    if (isHost && !_isRequestInProgress) ...[
-                      const SizedBox(height: 10),
+                    if (_isHost && !_busy) ...[
+                      const SizedBox(height:10),
                       ElevatedButton(
                         onPressed: _resolveAndAdvance,
-                        style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                        child: Text('Resolve Votes', style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: Text(
+                          'Resolve Votes',
+                          style: GoogleFonts.atma(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -403,133 +489,187 @@ class _StoryScreenState extends State<StoryScreen> {
     );
   }
 
-  /// Bottom sheet for showing the current options.
-  void showButtonMenu(BuildContext context) {
+  /* ── UI helpers ────────────────────────────────────────────────── */
+  PreferredSizeWidget _buildAppBar() => AppBar(
+    automaticallyImplyLeading: false,
+    backgroundColor: Colors.white.withOpacity(0.7),
+    elevation: 8,
+    centerTitle: true,
+    title: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        _storyTitle,
+        style: GoogleFonts.atma(
+          fontWeight: FontWeight.bold,
+          color: Colors.black,
+        ),
+      ),
+    ),
+    actions: [
+      PopupMenuButton<_MenuOption>(
+        icon: const Icon(Icons.menu, color: Colors.black),
+        onSelected: _onMenuSelected,
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: _MenuOption.backToScreen,
+            child: Text('Back a Screen', style: GoogleFonts.atma()),
+          ),
+          PopupMenuItem(
+            value: _MenuOption.previousLeg,
+            child: Text('Previous Leg', style: GoogleFonts.atma()),
+          ),
+          PopupMenuItem(
+              value: _MenuOption.viewFullStory,
+              child: Text('View Full Story', style: GoogleFonts.atma())),
+          PopupMenuItem(
+              value: _MenuOption.saveStory,
+              child: Text('Save Story', style: GoogleFonts.atma())),
+          PopupMenuItem(
+              value: _MenuOption.logout,
+              child: Text('Logout', style: GoogleFonts.atma())),
+          PopupMenuItem(
+              value: _MenuOption.closeMenu,
+              child: Text('Close Menu', style: GoogleFonts.atma())),
+        ],
+      ),
+    ],
+  );
+
+  Widget _buildStoryBox() => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Scrollbar(
+        controller: _scrollCtrl,
+        child: SingleChildScrollView(
+          controller: _scrollCtrl,
+          child: TextField(
+            controller: _textCtrl,
+            maxLines : null,
+            readOnly : true,
+            decoration: const InputDecoration.collapsed(
+              hintText: 'Story will appear here…',
+            ),
+            style: GoogleFonts.atma(),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /* Bottom‑sheet picker */
+  /* ── Bottom‑sheet option picker ──────────────────────────────────── */
+  void _showOptionSheet(BuildContext ctx) {
+    // Use the same gating logic as the main Choose button
+    final canPick = !_busy && (_phase == 'story' || _phase == 'storyVote');
+    if (!canPick) return;                     // ignore taps when not allowed
+
     showModalBottomSheet(
-      context: context,
+      context: ctx,
       builder: (_) => Container(
-        height: 250,
-        child: ListView.builder(
-          itemCount: currentOptions.length,
-          itemBuilder: (_, idx) {
-            final choice = currentOptions[idx];
-            final isFinal = choice == 'The story ends';
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-              child: ElevatedButton(
-                onPressed: _isRequestInProgress || isFinal
-                    ? null
-                    : () {
-                  Navigator.pop(context);
-                  _onNextSelected(choice);
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                child: Text(isFinal ? 'The story ends' : choice,
-                    style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+        height: 300,
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          children: [
+            ElevatedButton(
+              onPressed: _busy ? null : () {
+                Navigator.pop(ctx);
+                _confirmAndGoBack();
+              },
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
               ),
-            );
-          },
+              child: Text('Previous Leg',
+                  style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 8),
+            ..._currentOptions.map((choice) {
+              final isFinal = choice == 'The story ends';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: ElevatedButton(
+                  onPressed: (_busy || isFinal)
+                      ? null
+                      : () {
+                    Navigator.pop(ctx);
+                    _onNextSelected(choice);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: Text(
+                    isFinal ? 'The story ends' : choice,
+                    style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              );
+            }).toList(),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Full‑story dialog
-class FullStoryDialog extends StatefulWidget {
+/* ── Full‑story dialog ─────────────────────────────────────────── */
+class _FullStoryDialog extends StatefulWidget {
   final String fullStory;
   final List<String> dialogOptions;
   final ValueChanged<String> onOptionSelected;
+  final VoidCallback onShowOptions;
+  final bool canPick;                        // ← NEW
 
-  const FullStoryDialog({
+  const _FullStoryDialog({
     Key? key,
     required this.fullStory,
     required this.dialogOptions,
     required this.onOptionSelected,
+    required this.onShowOptions,
+    required this.canPick,                   // ← NEW
   }) : super(key: key);
 
   @override
-  _FullStoryDialogState createState() => _FullStoryDialogState();
+  State<_FullStoryDialog> createState() => _FullStoryDialogState();
 }
 
-class _FullStoryDialogState extends State<FullStoryDialog> {
-  final ScrollController _dialogScrollController = ScrollController();
+class _FullStoryDialogState extends State<_FullStoryDialog> {
+  final ScrollController _ctrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance?.addPostFrameCallback((_) {
-      if (_dialogScrollController.hasClients) {
-        _dialogScrollController.jumpTo(_dialogScrollController.position.maxScrollExtent);
-      }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_ctrl.hasClients) _ctrl.jumpTo(_ctrl.position.maxScrollExtent);
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Full Story So Far', style: GoogleFonts.atma()),
-      content: Container(
-        height: 300,
-        width: double.maxFinite,
-        child: Scrollbar(
-          controller: _dialogScrollController,
-          child: SingleChildScrollView(
-            controller: _dialogScrollController,
-            child: Text(widget.fullStory, style: GoogleFonts.atma()),
-          ),
+  Widget build(BuildContext dialogCtx) => AlertDialog(
+    title: Text('Full Story So Far', style: GoogleFonts.atma()),
+    content: Container(
+      height: 300,
+      width : double.maxFinite,
+      child: Scrollbar(
+        controller: _ctrl,
+        child: SingleChildScrollView(
+          controller: _ctrl,
+          child: Text(widget.fullStory, style: GoogleFonts.atma()),
         ),
       ),
-      actions: [
-        if (widget.dialogOptions.isNotEmpty)
-          ElevatedButton(
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (_) => Container(
-                  height: 250,
-                  child: ListView.builder(
-                    itemCount: widget.dialogOptions.length,
-                    itemBuilder: (_, idx) {
-                      final opt = widget.dialogOptions[idx];
-                      final isFinal = opt == 'The story ends';
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                        child: ElevatedButton(
-                          onPressed: isFinal
-                              ? null
-                              : () {
-                            widget.onOptionSelected(opt);
-                            Navigator.pop(context);
-                          },
-                          style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                          child: Text(isFinal ? 'The story ends' : opt,
-                              style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              );
-            },
-            child: Text('Choose Next Action', style: GoogleFonts.atma()),
-          ),
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Close', style: GoogleFonts.atma())),
-      ],
-    );
-  }
-}
-
-/// Error dialog helper
-void showErrorDialog(BuildContext context, String message) {
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Error'),
-      content: Text(message),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-      ],
     ),
+    actions: [
+      if (widget.dialogOptions.isNotEmpty)
+        ElevatedButton(
+          onPressed: widget.canPick ? widget.onShowOptions : null,   // ← LOCK
+          child: Text('Choose Next Action', style: GoogleFonts.atma()),
+        ),
+      TextButton(
+        onPressed: () => Navigator.pop(dialogCtx),
+        child: Text('Close', style: GoogleFonts.atma()),
+      ),
+    ],
   );
 }
