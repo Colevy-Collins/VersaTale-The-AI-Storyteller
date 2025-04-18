@@ -93,10 +93,11 @@ class _VoteResultsScreenState extends State<VoteResultsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => StoryScreen(
+          sessionId:  widget.sessionId,
           initialLeg: payload['initialLeg'] as String,
-          options: List<String>.from(payload['options'] as List<dynamic>),
+          options:    List<String>.from(payload['options'] as List<dynamic>),
           storyTitle: payload['storyTitle'] as String,
-        ),
+        )
       ),
     );
   }

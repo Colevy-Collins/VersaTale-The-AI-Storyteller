@@ -189,18 +189,6 @@ class LobbyRtdbService {
     });
   }
 
-  /// Host: advance from voteResults to story, publishing the first leg.
-  Future<void> advanceToStoryPhase({
-    required String sessionId,
-    required Map<String, dynamic> storyPayload,
-  }) async {
-    final ref = _lobbyRef(sessionId);
-    await ref.update({
-      'storyPayload': storyPayload,
-      'phase':        'story',
-    });
-  }
-
   /// Optional: leave the lobby (remove your player entry + votes).
   Future<void> leaveLobby(String sessionId) async {
     final uid = _auth.currentUser!.uid;
@@ -219,4 +207,73 @@ class LobbyRtdbService {
     }
     await lobby.child('votes').child(uid).remove();
   }
+
+  /// Player: submit your vote on the next decision.
+  /// Player: submit your vote for the next story decision.
+  Future<void> submitStoryVote({
+    required String sessionId,
+    required String vote,
+  }) async {
+    final uid     = _auth.currentUser!.uid;
+    final voteRef = _lobbyRef(sessionId).child('storyVotes').child(uid);
+    await voteRef.set(vote);
+  }
+
+  /// Anyone: change the lobby phase.
+  Future<void> updatePhase({
+    required String sessionId,
+    required String phase,
+  }) async {
+    await _lobbyRef(sessionId).update({'phase': phase});
+  }
+
+  /// Host: tally all storyVotes, pick a winning choice, clear votes,
+  /// and set phase to 'storyVoteResults'. Returns the winner.
+  Future<String> resolveStoryVotes(String sessionId) async {
+    final ref  = _lobbyRef(sessionId);
+    final snap = await ref.get();
+    final data = (snap.value as Map?)?.cast<String, dynamic>() ?? {};
+
+    // Count votes
+    final votes = (data['storyVotes'] as Map?)?.cast<String, dynamic>() ?? {};
+    final counts = <String,int>{};
+    votes.values.forEach((v) {
+      final choice = v.toString();
+      counts[choice] = (counts[choice] ?? 0) + 1;
+    });
+
+    // Determine winner (random tie‑break)
+    final maxCount = counts.values.fold(0, (a, b) => b > a ? b : a);
+    final winners  = counts.entries
+        .where((e) => e.value == maxCount)
+        .map((e) => e.key)
+        .toList();
+    final winner = winners[Random().nextInt(winners.length)];
+
+    // Write result + advance phase
+    await ref.update({
+      'resolvedChoice': winner,
+      'phase':          'storyVoteResults',
+    });
+
+    // Clear votes for next round
+    await ref.child('storyVotes').remove();
+    return winner;
+  }
+
+  /// Host: after picking the next leg, broadcast it to everyone.
+  Future<void> advanceToStoryPhase({
+    required String sessionId,
+    required Map<String, dynamic> storyPayload,
+  }) async {
+    final ref = _lobbyRef(sessionId);
+    await ref.update({
+      'storyPayload': storyPayload,
+      'phase':        'story',
+    });
+  }
+
+
+
+
 }
