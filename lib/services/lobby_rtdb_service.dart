@@ -242,6 +242,54 @@ class LobbyRtdbService {
     });
   }
 
+  Future<void> setPhaseToStory({
+    required String sessionId,
+  }) async {
+    await _lobbyRef(sessionId).update({
+      'phase'        : 'story',
+    });
+  }
+
+  Future<void> setPhaseTolobby({
+    required String sessionId,
+  }) async {
+    await _lobbyRef(sessionId).update({
+      'phase'        : 'lobby',
+    });
+  }
+
+  Future<bool> checkDefaultDims({
+    required String sessionId,
+  }) async {
+    final ref = _lobbyRef(sessionId);
+
+    final bool hasDefaults = (await ref.child('randomDefaults').get()).exists;
+    return hasDefaults;
+  }
+
+  /// Anyone: fetch the current storyPayload, but only if we're in the 'story' phase.
+  /// Returns the payload map when phase == 'story', or null otherwise.
+  Future<Map<String, dynamic>?> fetchStoryPayloadIfInStoryPhase({
+    required String sessionId,
+  }) async {
+    final ref = _lobbyRef(sessionId);
+
+    // 1) Check current phase
+    final phaseSnap = await ref.child('phase').get();
+    if (phaseSnap.value != 'story') {
+      return null;
+    }
+
+    // 2) Read the storyPayload
+    final payloadSnap = await ref.child('storyPayload').get();
+    if (!payloadSnap.exists || payloadSnap.value == null) {
+      return null;
+    }
+
+    // 3) Cast and return
+    return Map<String, dynamic>.from(payloadSnap.value as Map);
+  }
+
   /// Host: tally all storyVotes, pick a winning choice, clear votes,
   /// and set phase to 'storyVoteResults'. Returns the winner.
   /// Host: tally votes → pick winner → clear votes → push 'storyVoteResults'.

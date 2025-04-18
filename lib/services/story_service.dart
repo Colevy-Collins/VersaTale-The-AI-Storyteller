@@ -542,7 +542,7 @@ class StoryService {
 /*───────────────────────  M U L T I P L A Y E R  ──────────────────────────*/
 
   /// 1️⃣ Host reserves a sessionId + joinCode.
-  Future<Map<String, dynamic>> createMultiplayerSession() async {
+  Future<Map<String, dynamic>> createMultiplayerSession(String isNewGame) async {
     final token = await authService.getToken();
     if (token == null) throw "User is not authenticated.";
 
@@ -552,6 +552,7 @@ class StoryService {
         'Authorization': 'Bearer $token',
         'Content-Type':  'application/json',
       },
+      body: jsonEncode({'isNewGame' : isNewGame,}),
     );
 
     if (res.statusCode == 200) {

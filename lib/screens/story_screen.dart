@@ -1,5 +1,6 @@
 // lib/screens/story_screen.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,10 +12,11 @@ import '../services/auth_service.dart';
 import '../services/story_service.dart';
 import '../services/lobby_rtdb_service.dart';
 import 'main_splash_screen.dart';
+import 'multiplayer_host_lobby_screen.dart';
 
 enum _MenuOption {
   backToScreen,
-  previousLeg,
+  startGroupStory,
   viewFullStory,
   saveStory,
   logout,
@@ -26,6 +28,7 @@ class StoryScreen extends StatefulWidget {
   final List<String> options;
   final String storyTitle;
   final String? sessionId; // null = solo, non‑null = multiplayer
+
 
   const StoryScreen({
     Key? key,
@@ -54,6 +57,7 @@ class _StoryScreenState extends State<StoryScreen> {
   bool   _busy       = false;
   Map<String,dynamic> _players = {};
 
+  bool   _loading  = false;
   bool get _isMultiplayer => widget.sessionId != null;
   bool get _isHost {
     final slot1 = _players['1'];
@@ -211,13 +215,16 @@ class _StoryScreenState extends State<StoryScreen> {
 
   Future<void> _resolveAndAdvance() async {
     _closeAnyOptionSheet();
+    print(1);
     setState(() => _busy = true);
     try {
       await _lobbySvc.updatePhase(
         sessionId: widget.sessionId!,
-        phase    : 'storyVoteResults',
+        phase: 'storyVoteResults',
       );
+      print(2);
       final winner = await _lobbySvc.resolveStoryVotes(widget.sessionId!);
+      print('Winner: $winner');
       if (winner == kPreviousLegToken) {
         final prev = await _storySvc.getPreviousLeg();
         await _lobbySvc.advanceToStoryPhase(
@@ -240,7 +247,7 @@ class _StoryScreenState extends State<StoryScreen> {
         );
       }
     } catch (e) {
-      _showError('$e');
+      _showError('Error resolving votes: $e');
       await _rollbackToStoryPhase();
     } finally {
       setState(() => _busy = false);
@@ -271,7 +278,7 @@ class _StoryScreenState extends State<StoryScreen> {
       await _submitVote(decision);
       return;
     }
-
+    print('Decision: $decision');
     // 3) solo → advance immediately
     setState(() => _busy = true);
     try {
@@ -359,6 +366,62 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
+  /// In whatever class you had before (e.g. in StoryScreen or a controller):
+  Future<void> _createGroupSession() async {
+    setState(() => _loading = true);
+    try {
+      // 1) Ask your backend for a fresh sessionId & joinCode
+      final backendRes = await _storySvc.createMultiplayerSession("false");
+      final sessionId  = backendRes['sessionId'] as String;
+      final joinCode   = backendRes['joinCode']  as String;
+
+      // 2) Seed RTDB lobby with host’s random defaults
+      final hostName   = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
+      await _lobbySvc.createSession(
+        sessionId:      sessionId,
+        hostName:       hostName,
+        randomDefaults: {},
+      );
+
+      // 3) Immediately broadcast the host’s current solo story into RTDB
+      await _lobbySvc.advanceToStoryPhase(
+        sessionId: sessionId,
+        storyPayload: {
+          'initialLeg': widget.initialLeg,
+          'options'   : widget.options,
+          'storyTitle': widget.storyTitle,
+        },
+      );
+
+      // 4) Build minimal playersMap (host only)
+      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final playersMap = <int, Map<String, dynamic>>{
+        1: {'displayName': hostName, 'userId': currentUid},
+      };
+
+      // 5) Navigate into your multiplayer lobby
+      if (!mounted) return;
+      _lobbySvc.setPhaseTolobby(sessionId: sessionId);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MultiplayerHostLobbyScreen(
+            sessionId:  sessionId,
+            joinCode:   joinCode,
+            playersMap: playersMap,
+            fromSoloStory: !_isMultiplayer,
+            fromGroupStory: _isMultiplayer,
+
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext ctx) {
     final canPick = !_busy && (_phase == 'story' || _phase == 'storyVote');
@@ -382,8 +445,8 @@ class _StoryScreenState extends State<StoryScreen> {
                 case _MenuOption.backToScreen:
                   Navigator.pop(context);
                   break;
-                case _MenuOption.previousLeg:
-                  await _confirmAndGoBack();
+                case _MenuOption.startGroupStory:
+                  await _createGroupSession();
                   break;
                 case _MenuOption.viewFullStory:
                   _showFullStory();
@@ -408,8 +471,8 @@ class _StoryScreenState extends State<StoryScreen> {
                   child: Text('Back a Screen',
                       style: GoogleFonts.atma())),
               PopupMenuItem(
-                  value: _MenuOption.previousLeg,
-                  child: Text('Previous Leg',
+                  value: _MenuOption.startGroupStory,
+                  child: Text('Start Group Story',
                       style: GoogleFonts.atma())),
               PopupMenuItem(
                   value: _MenuOption.viewFullStory,

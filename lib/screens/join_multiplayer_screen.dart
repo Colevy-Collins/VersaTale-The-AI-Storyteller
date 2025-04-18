@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/story_service.dart';
 import '../services/lobby_rtdb_service.dart';
 import 'create_new_story_screen.dart';
+import 'multiplayer_host_lobby_screen.dart';
 
 class JoinMultiplayerScreen extends StatefulWidget {
   const JoinMultiplayerScreen({Key? key}) : super(key: key);
@@ -71,17 +72,36 @@ class _JoinMultiplayerScreenState extends State<JoinMultiplayerScreen> {
 
       // 3️⃣ Navigate into the voting screen
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CreateNewStoryScreen(
-            isGroup: true,
-            sessionId: sessionId,
-            joinCode: joinCode,
-            initialPlayersMap: playersMap,
+      bool isNewStory = await _lobbySvc.checkDefaultDims(sessionId: sessionId);
+      if(isNewStory){
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CreateNewStoryScreen(
+              isGroup: true,
+              sessionId: sessionId,
+              joinCode: joinCode,
+              initialPlayersMap: playersMap,
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MultiplayerHostLobbyScreen(
+              sessionId:  sessionId,
+              joinCode:   joinCode,
+              playersMap: playersMap,
+              fromSoloStory: false,
+              fromGroupStory: false,
+            ),
+          ),
+        );
+
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to join: $e', style: GoogleFonts.atma())),

@@ -108,6 +108,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         storyLength:   _storyLen,
       );
       if (!mounted) return;
+      print('res: $res');
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -131,7 +132,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     setState(() => _loading = true);
     try {
       // 1) Ask backend for a fresh sessionId & joinCode (no story yet)
-      final backendRes = await _storySvc.createMultiplayerSession();
+      final backendRes = await _storySvc.createMultiplayerSession("true");
       final sessionId  = backendRes['sessionId'] as String;
       final joinCode   = backendRes['joinCode']  as String;
 
@@ -158,6 +159,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
             sessionId:     sessionId,
             joinCode:      joinCode,
             playersMap:    playersMap,
+            fromSoloStory: false,
+            fromGroupStory: false,
           ),
         ),
       );
@@ -189,6 +192,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
             sessionId:  widget.sessionId!,
             joinCode:   widget.joinCode!,
             playersMap: widget.initialPlayersMap!,
+            fromSoloStory: false,
+            fromGroupStory: false,
           ),
         ),
       );
