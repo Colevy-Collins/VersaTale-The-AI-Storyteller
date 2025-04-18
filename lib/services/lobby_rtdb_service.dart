@@ -221,69 +221,68 @@ class LobbyRtdbService {
   }
 
   /// Anyone: change the lobby phase.
+  /// Anyone: set lobby phase.  Single lightweight write.
   Future<void> updatePhase({
     required String sessionId,
     required String phase,
   }) async {
-    await _lobbyRef(sessionId).update({'phase': phase});
+    await _lobbyRef(sessionId).child('phase').set(phase);
   }
 
   /// Host: after picking the next leg, broadcast it to everyone.
+  /// Host: broadcast the freshly built story leg and flip phase back to 'story'.
   Future<void> advanceToStoryPhase({
     required String sessionId,
     required Map<String, dynamic> storyPayload,
   }) async {
-    final ref = _lobbyRef(sessionId);
-    await ref.update({
-      'storyPayload': storyPayload,
-      'phase':        'story',
+    await _lobbyRef(sessionId).update({
+      'storyPayload' : storyPayload,
+      'resolvedChoice': null,   // clean slate for next round
+      'phase'        : 'story',
     });
   }
 
   /// Host: tally all storyVotes, pick a winning choice, clear votes,
   /// and set phase to 'storyVoteResults'. Returns the winner.
+  /// Host: tally votes → pick winner → clear votes → push 'storyVoteResults'.
+  /// Uses ONE multi‑path update to minimize writes.
   Future<String> resolveStoryVotes(String sessionId) async {
     final ref  = _lobbyRef(sessionId);
     final snap = await ref.get();
     final data = (snap.value as Map?)?.cast<String, dynamic>() ?? {};
 
-    // 1. Count votes
-    final votes   = (data['storyVotes'] as Map?)?.cast<String, dynamic>() ?? {};
-    final counts  = <String,int>{};
+    // Count votes
+    final votes  = (data['storyVotes'] as Map?)?.cast<String, dynamic>() ?? {};
+    final counts = <String,int>{};
     votes.values.forEach((v) {
       final choice = v.toString();
       counts[choice] = (counts[choice] ?? 0) + 1;
     });
 
-    // 2. Identify top‑vote choices
-    final maxCount = counts.values.fold(0, (a, b) => b > a ? b : a);
-    var   winners  = counts.entries
-        .where((e) => e.value == maxCount)
+    // Find winners
+    final maxCnt  = counts.values.fold(0, (a,b) => b>a ? b : a);
+    var   winners = counts.entries
+        .where((e) => e.value == maxCnt)
         .map((e) => e.key)
         .toList();
 
-    /* ── 3. Special rule: "<<PREVIOUS_LEG>>" can’t win a tie ───────────── */
+    // "<<PREVIOUS_LEG>>" cannot break a tie
     if (winners.length > 1 && winners.contains(kPreviousLegToken)) {
       winners.remove(kPreviousLegToken);
     }
-    if (winners.isEmpty) {
-      // This happens only when previous‑leg was removed from a tie,
-      // so it must have been the sole remaining candidate originally.
-      winners = [kPreviousLegToken];
-    }
+    if (winners.isEmpty) winners = [kPreviousLegToken];
 
-    // 4. Pick the winner (random if >1 remaining)
     final winner = winners[Random().nextInt(winners.length)];
 
-    // 5. Write result & clean up
+    // One atomic update: set result + phase, and null‑out old votes
     await ref.update({
       'resolvedChoice': winner,
       'phase'         : 'storyVoteResults',
+      'storyVotes'    : null,          // clear votes
     });
-    await ref.child('storyVotes').remove();      // clear votes
+
     return winner;
   }
-
 
 
 
