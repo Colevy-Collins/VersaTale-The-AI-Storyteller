@@ -58,6 +58,7 @@ class _StoryScreenState extends State<StoryScreen> {
   bool   _busy       = false;
   Map<String,dynamic> _players = {};
 
+  int _inLobbyCount = 0;
   bool   _loading  = false;
   bool get _isMultiplayer => widget.sessionId != null;
   bool get _isHost {
@@ -95,6 +96,12 @@ class _StoryScreenState extends State<StoryScreen> {
 
   void _onLobbyUpdate(DatabaseEvent event) {
     final root = (event.snapshot.value as Map?)?.cast<dynamic,dynamic>() ?? {};
+
+    // ─── lobby count ───
+    final newCount = root['inLobbyCount'] as int? ?? 0;
+    if (newCount != _inLobbyCount) {
+      setState(() => _inLobbyCount = newCount);
+    }
 
     // 1️⃣ players
     _players = _normalizePlayers(root['players']);
@@ -181,6 +188,24 @@ class _StoryScreenState extends State<StoryScreen> {
           backgroundColor: isError ? Colors.red : null,
         ),
       );
+
+  Future<void> _hostBringEveryoneBack() async {
+    if (!_isHost || widget.sessionId == null) return;
+    setState(() => _busy = true);
+
+    try {
+      // 2 flip back to story phase
+      await _lobbySvc.updatePhase(
+        sessionId: widget.sessionId!,
+        phase: 'story',
+      );
+    } catch (e) {
+      _showError('Error bringing everyone back: $e');
+    } finally {
+      setState(() => _busy = false);
+    }
+  }
+
 
   Future<void> _soloPreviousLeg() async {
     if (_busy) return;
@@ -371,27 +396,26 @@ class _StoryScreenState extends State<StoryScreen> {
   Future<void> _createGroupSession() async {
     setState(() => _loading = true);
     try {
-      if(!_isMultiplayer) {
-        // 1) Ask your backend for a fresh sessionId & joinCode
+      if (!_isMultiplayer) {
+        // 1) Get a fresh sessionId & joinCode from your backend
         final backendRes = await _storySvc.createMultiplayerSession("false");
-        final sessionId = backendRes['sessionId'] as String;
-        final joinCode = backendRes['joinCode'] as String;
+        final newSessionId = backendRes['sessionId'] as String;
+        final newJoinCode  = backendRes['joinCode']  as String;
 
-        // 2) Seed RTDB lobby with host’s random defaults
-        final hostName = FirebaseAuth.instance.currentUser?.displayName ??
-            'Host';
+        // 2) Seed RTDB lobby
+        final hostName = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
         await _lobbySvc.createSession(
-          sessionId: sessionId,
-          hostName: hostName,
+          sessionId:      newSessionId,
+          hostName:       hostName,
           randomDefaults: {},
         );
 
-        // 3) Immediately broadcast the host’s current solo story into RTDB
+        // 3) Broadcast the current solo story into RTDB
         await _lobbySvc.advanceToStoryPhase(
-          sessionId: sessionId,
+          sessionId: newSessionId,
           storyPayload: {
             'initialLeg': widget.initialLeg,
-            'options': widget.options,
+            'options':    widget.options,
             'storyTitle': widget.storyTitle,
           },
         );
@@ -402,45 +426,59 @@ class _StoryScreenState extends State<StoryScreen> {
           1: {'displayName': hostName, 'userId': currentUid},
         };
 
-        // 5) Navigate into your multiplayer lobby
+        // 5) Flip the phase to 'lobby' using the NEW sessionId
+        await _lobbySvc.updatePhase(
+          sessionId: newSessionId,
+          phase:     'lobby',
+        );
+
+        // 6) Navigate into the host lobby screen
         if (!mounted) return;
-        _lobbySvc.setPhaseTolobby(sessionId: sessionId);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                MultiplayerHostLobbyScreen(
-                  sessionId: sessionId,
-                  joinCode: joinCode,
-                  playersMap: playersMap,
-                  fromSoloStory: !_isMultiplayer,
-                  fromGroupStory: _isMultiplayer,
-
-                ),
+            builder: (_) => MultiplayerHostLobbyScreen(
+              sessionId:      newSessionId,
+              joinCode:       newJoinCode,
+              playersMap:     playersMap,
+              fromSoloStory:  true,
+              fromGroupStory: false,
+            ),
           ),
         );
-      } else if(_isMultiplayer){
 
-        final playersMap = await _lobbySvc.fetchPlayerList(sessionId: widget.sessionId!);
+      } else {
+        // ── already in multiplayer ──
+        final existingSession = widget.sessionId!;
+        final existingCode    = widget.joinCode!;
 
+        final playersMap = await _lobbySvc.fetchPlayerList(
+          sessionId: existingSession,
+        );
+
+        await _lobbySvc.updatePhase(
+          sessionId: existingSession,
+          phase:     'lobby',
+        );
+
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                MultiplayerHostLobbyScreen(
-                  sessionId: widget.sessionId!,
-                  joinCode: widget.joinCode!,
-                  playersMap: playersMap,
-                  fromSoloStory: !_isMultiplayer,
-                  fromGroupStory: _isMultiplayer,
-
-                ),
+            builder: (_) => MultiplayerHostLobbyScreen(
+              sessionId:      existingSession,
+              joinCode:       existingCode,
+              playersMap:     playersMap,
+              fromSoloStory:  false,
+              fromGroupStory: true,
+            ),
           ),
         );
-
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error creating session: $e')),
+      );
     } finally {
       setState(() => _loading = false);
     }
@@ -448,7 +486,14 @@ class _StoryScreenState extends State<StoryScreen> {
 
   @override
   Widget build(BuildContext ctx) {
-    final canPick = !_busy && (_phase == 'story' || _phase == 'storyVote');
+    // allow voting only when:
+    //  • not busy
+    //  • in the “story” or “storyVote” phase
+    //  • nobody is currently in the lobby
+    final canPick = !_busy
+        && (_phase == 'story' || _phase == 'storyVote')
+        && _inLobbyCount == 0;
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -457,9 +502,13 @@ class _StoryScreenState extends State<StoryScreen> {
         centerTitle: true,
         title: FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(_storyTitle,
-              style: GoogleFonts.atma(
-                  fontWeight: FontWeight.bold, color: Colors.black)),
+          child: Text(
+            _storyTitle,
+            style: GoogleFonts.atma(
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
         ),
         actions: [
           PopupMenuButton<_MenuOption>(
@@ -481,51 +530,46 @@ class _StoryScreenState extends State<StoryScreen> {
                 case _MenuOption.logout:
                   await _authSvc.signOut();
                   Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => MainSplashScreen()));
+                    context,
+                    MaterialPageRoute(builder: (_) => MainSplashScreen()),
+                  );
                   break;
                 case _MenuOption.closeMenu:
                   break;
               }
             },
             itemBuilder: (_) => [
-              PopupMenuItem(
+              const PopupMenuItem(
                   value: _MenuOption.backToScreen,
-                  child: Text('Back a Screen',
-                      style: GoogleFonts.atma())),
-              PopupMenuItem(
+                  child: Text('Back a Screen', style: TextStyle())),
+              const PopupMenuItem(
                   value: _MenuOption.startGroupStory,
-                  child: Text('Start Group Story',
-                      style: GoogleFonts.atma())),
-              PopupMenuItem(
+                  child: Text('Start Group Story')),
+              const PopupMenuItem(
                   value: _MenuOption.viewFullStory,
-                  child: Text('View Full Story',
-                      style: GoogleFonts.atma())),
-              PopupMenuItem(
+                  child: Text('View Full Story')),
+              const PopupMenuItem(
                   value: _MenuOption.saveStory,
-                  child: Text('Save Story',
-                      style: GoogleFonts.atma())),
-              PopupMenuItem(
+                  child: Text('Save Story')),
+              const PopupMenuItem(
                   value: _MenuOption.logout,
-                  child: Text('Logout',
-                      style: GoogleFonts.atma())),
-              PopupMenuItem(
+                  child: Text('Logout')),
+              const PopupMenuItem(
                   value: _MenuOption.closeMenu,
-                  child: Text('Close Menu',
-                      style: GoogleFonts.atma())),
+                  child: Text('Close Menu')),
             ],
           ),
         ],
       ),
       body: LayoutBuilder(
-        builder: (_,__) => Center(
+        builder: (_, __) => Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 800),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  // Story text area
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(8),
@@ -541,40 +585,69 @@ class _StoryScreenState extends State<StoryScreen> {
                             controller: _textCtrl,
                             maxLines: null,
                             readOnly: true,
-                            decoration:
-                            const InputDecoration.collapsed(hintText: 'Story will appear here…'),
+                            decoration: const InputDecoration.collapsed(
+                                hintText: 'Story will appear here…'),
                             style: GoogleFonts.atma(),
                           ),
                         ),
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 20),
+
+                  // Choose Next Action (voting) button
                   ElevatedButton(
                     onPressed: canPick ? () => _showOptionSheet(ctx) : null,
                     style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48)),
                     child: _busy
                         ? const CircularProgressIndicator()
-                        : Text('Choose Next Action',
-                        style: GoogleFonts.atma(
-                            fontWeight: FontWeight.bold)),
+                        : Text(
+                      'Choose Next Action',
+                      style: GoogleFonts.atma(
+                          fontWeight: FontWeight.bold),
+                    ),
                   ),
+
+                  // NEW: host “Take Everyone to Story” button
+                  if (_isMultiplayer && _isHost && (_inLobbyCount > 0 || _phase == "lobby")) ...[
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: _busy ? null : _hostBringEveryoneBack,
+                      style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48)),
+                      child: _busy
+                          ? const CircularProgressIndicator()
+                          : Text(
+                        'Take Everyone to Story',
+                        style: GoogleFonts.atma(
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+
+                  // Waiting / Resolve votes UI
                   if (_isMultiplayer && _phase == 'storyVote') ...[
                     const SizedBox(height: 20),
                     _busy
                         ? const CircularProgressIndicator()
-                        : Text('Waiting for votes…',
-                        style: GoogleFonts.atma(fontSize: 16),
-                        textAlign: TextAlign.center),
+                        : Text(
+                      'Waiting for votes…',
+                      style: GoogleFonts.atma(fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
                     if (_isHost && !_busy) ...[
                       const SizedBox(height: 10),
                       ElevatedButton(
                         onPressed: _resolveAndAdvance,
                         style: ElevatedButton.styleFrom(
                             minimumSize: const Size.fromHeight(48)),
-                        child: Text('Resolve Votes',
-                            style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+                        child: Text(
+                          'Resolve Votes',
+                          style: GoogleFonts.atma(
+                              fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ],
                   ],
@@ -586,6 +659,7 @@ class _StoryScreenState extends State<StoryScreen> {
       ),
     );
   }
+
 
   void _showOptionSheet(BuildContext ctx) {
     final canPick = !_busy && (_phase == 'story' || _phase == 'storyVote');

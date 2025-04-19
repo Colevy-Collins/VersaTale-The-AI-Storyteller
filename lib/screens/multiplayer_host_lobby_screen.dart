@@ -18,6 +18,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../services/lobby_rtdb_service.dart';
 import 'vote_results_screen.dart';
 import 'story_screen.dart';
+import 'dashboard_screen.dart';
 
 class MultiplayerHostLobbyScreen extends StatefulWidget {
   final String sessionId;
@@ -58,6 +59,7 @@ class _MultiplayerHostLobbyScreenState
   bool _isResolving = false;
   bool _navigated     = false;
   String? _lastPhase;     // track last seen RTDB phase
+  bool _hasStoryPayload = false;
 
   @override
   void initState() {
@@ -65,6 +67,10 @@ class _MultiplayerHostLobbyScreenState
     _currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     _playersMap = Map.of(widget.playersMap);
     _lastPhase  = null;
+
+        // increment our "in lobby" counter
+        _lobbySvc.incrementInLobbyCount(widget.sessionId)
+          .catchError((e) => debugPrint('Failed to increment inLobbyCount: $e'));
 
     // Start listening for phase changes + player updates
     _sub = _lobbySvc
@@ -74,12 +80,51 @@ class _MultiplayerHostLobbyScreenState
 
   @override
   void dispose() {
+        // decrement our "in lobby" counter
+        _lobbySvc.decrementInLobbyCount(widget.sessionId)
+          .catchError((e) => debugPrint('Failed to decrement inLobbyCount: $e'));
     _sub.cancel();
     super.dispose();
   }
 
+  Future<void> _kickPlayer(int slot) async {
+    final name = _playersMap[slot]!['displayName'];
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Kick Player', style: GoogleFonts.atma()),
+        content: Text('Are you sure you want to remove $name from the lobby?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Kick'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _lobbySvc.kickPlayer(
+          sessionId: widget.sessionId,
+          slot: slot,
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to kick $name: $e')),
+        );
+      }
+    }
+  }
+
+
   void _handleLobbySnapshot(DatabaseEvent event) {
     final root = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
+
     // — normalize players…
     final rawPlayers = root['players'];
     final flat = <String, dynamic>{};
@@ -94,36 +139,66 @@ class _MultiplayerHostLobbyScreenState
     final newMap = flat.map<int, Map<String, dynamic>>(
           (k, v) => MapEntry(int.parse(k), Map<String, dynamic>.from(v)),
     );
+
+    // — DETECT A KICK: if my UID is no longer present
+    final stillHere = newMap.values.any((p) => p['userId'] == _currentUid);
+    if (!stillHere) {
+      // stop listening
+      _sub.cancel();
+      // send me back to Dashboard
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+        );
+      }
+      return;
+    }
+
+    // — update UI only if players list changed
     if (newMap.toString() != _playersMap.toString()) {
       setState(() => _playersMap = newMap);
     }
 
-    // — determine phase transitions only
+    // — now handle phase changes exactly as before
     final newPhase = (root['phase'] as String?) ?? 'lobby';
-
-    // first snapshot: just record it
     if (_lastPhase == null) {
       _lastPhase = newPhase;
       return;
     }
-
-    // if phase truly changed
     if (!_navigated && newPhase != _lastPhase) {
       if (newPhase == 'voteResults' && root['resolvedDimensions'] != null) {
-        final resolvedRaw = root['resolvedDimensions'];
-        final resolved = Map<String, String>.from(
-          resolvedRaw is Map ? resolvedRaw : {},
+        final raw = root['resolvedDimensions'] as Map;
+        final resolved = raw.map((k, v) => MapEntry(k.toString(), v.toString()));
+        _navigated = true;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => VoteResultsScreen(
+              resolvedResults: resolved,
+              sessionId: widget.sessionId,
+              joinCode: widget.joinCode,
+            ),
+          ),
         );
-        _goToResults(resolved);
-
       } else if (newPhase == 'story' && root['storyPayload'] != null) {
-        _goToStoryScreen();
+        _navigated = true;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StoryScreen(
+              sessionId: widget.sessionId,
+              initialLeg: root['storyPayload']['initialLeg'],
+              options: List<String>.from(root['storyPayload']['options'] ?? []),
+              storyTitle: root['storyPayload']['storyTitle'],
+              joinCode: widget.joinCode,
+            ),
+          ),
+        );
       }
     }
-
     _lastPhase = newPhase;
   }
-
   Future<void> _hostStartStory() async {
     if (!_isHost) return;
     if (_playersMap.length < 2) {
@@ -179,26 +254,35 @@ class _MultiplayerHostLobbyScreenState
   Future<void> _goToStoryScreen() async {
     if (_navigated) return;
     _navigated = true;
-
     setState(() => _isResolving = true);
-    final payload = await _lobbySvc
+
+    // 1) try the phase‐guarded fetch
+    var payload = await _lobbySvc
         .fetchStoryPayloadIfInStoryPhase(sessionId: widget.sessionId);
 
+    // 2) if that failed (because you kept phase='lobby'), force‐fetch it anyway
     if (payload == null) {
-      // nothing to show – reset spinner & allow retry
+      payload = await _lobbySvc.fetchStoryPayload(
+        sessionId: widget.sessionId,
+      );
+    }
+
+    if (payload == null) {
+      // no story to show
       _navigated = false;
       setState(() => _isResolving = false);
       return;
     }
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => StoryScreen(
           sessionId:  widget.sessionId,
-          initialLeg: payload['initialLeg'],
+          initialLeg: payload!['initialLeg'],
           options:    List<String>.from(payload['options'] ?? []),
           storyTitle: payload['storyTitle'],
-          joinCode:  widget.joinCode,
+          joinCode:   widget.joinCode,
         ),
       ),
     );
@@ -249,17 +333,29 @@ class _MultiplayerHostLobbyScreenState
       for (final slot in slots)
         ListTile(
           leading: Text('$slot', style: GoogleFonts.atma(fontSize: 16)),
-          title: Text(
-            '${_playersMap[slot]!['displayName']}',
-            style: GoogleFonts.atma(),
-          ),
-          trailing: _playersMap[slot]!['userId'] == _currentUid
-              ? IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: _changeMyName,
-          )
-              : null,
-        ),
+              title: Text(
+                '${_playersMap[slot]!['displayName']}',
+                style: GoogleFonts.atma(),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // allow me to rename myself
+                  if (_playersMap[slot]!['userId'] == _currentUid)
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: _changeMyName,
+                    ),
+                  // allow host to kick others
+                  if (_isHost && _playersMap[slot]!['userId'] != _currentUid)
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      tooltip: 'Kick ${_playersMap[slot]!['displayName']}',
+                      onPressed: () => _kickPlayer(slot),
+                    ),
+                ],
+              ),
+            ),
     ];
   }
 

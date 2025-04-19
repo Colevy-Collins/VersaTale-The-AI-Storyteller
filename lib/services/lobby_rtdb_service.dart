@@ -267,6 +267,67 @@ class LobbyRtdbService {
     return hasDefaults;
   }
 
+  /// Increment the in‑lobby counter.
+  Future<void> incrementInLobbyCount(String sessionId) async {
+    final countRef = _lobbyRef(sessionId).child('inLobbyCount');
+    await countRef.runTransaction((currentData) {
+      // currentData is the existing value at this location (or null)
+      final current = (currentData as int?) ?? 0;
+      return Transaction.success(current + 1);
+    });
+  }
+
+  Future<Map<String, dynamic>?> fetchStoryPayload({
+    required String sessionId,
+  }) async {
+    final snap = await _lobbyRef(sessionId).child('storyPayload').get();
+    if (!snap.exists || snap.value == null) return null;
+    return Map<String, dynamic>.from(snap.value as Map);
+  }
+
+
+  /// Decrement the in‑lobby counter (never below 0),
+  /// and if it just went to 0, set phase → 'story'.
+  Future<void> decrementInLobbyCount(String sessionId) async {
+    final countRef = _lobbyRef(sessionId).child('inLobbyCount');
+
+    // Run the transaction and capture the result
+    final result = await countRef.runTransaction((currentData) {
+      final current = (currentData as int?) ?? 0;
+      final next = current - 1;
+      return Transaction.success(next >= 0 ? next : 0);
+    });
+
+    // After committing, check the new count
+    final newCount = (result.snapshot.value as int?) ?? 0;
+    if (newCount == 0) {
+      // last one out—flip phase to 'story'
+      await _lobbyRef(sessionId).child('phase').set('story');
+    }
+  }
+
+  /// Host: remove a player (and their votes) by slot index.
+  Future<void> kickPlayer({
+    required String sessionId,
+    required int slot,
+  }) async {
+    final lobbyRef = _lobbyRef(sessionId);
+    final playerRef = lobbyRef.child('players').child('$slot');
+
+    // get the userId so we can also delete their votes
+    final snap = await playerRef.get();
+    if (snap.exists && snap.value is Map) {
+      final userId = (snap.value as Map)['userId'] as String?;
+      // remove the player entry
+      await playerRef.remove();
+      if (userId != null) {
+        // also remove any votes they had submitted
+        await lobbyRef.child('votes').child(userId).remove();
+      }
+    }
+  }
+
+
   /// Anyone: fetch the current storyPayload, but only if we're in the 'story' phase.
   /// Returns the payload map when phase == 'story', or null otherwise.
   Future<Map<String, dynamic>?> fetchStoryPayloadIfInStoryPhase({
