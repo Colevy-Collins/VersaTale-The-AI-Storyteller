@@ -38,6 +38,7 @@ class LobbyRtdbService {
     required String sessionId,
     required String hostName,
     required Map<String, String> randomDefaults,
+    required bool newGame
   }) async {
     final uid = _auth.currentUser!.uid;
 
@@ -61,6 +62,7 @@ class LobbyRtdbService {
       'phase'         : 'lobby',
       'votesResolved' : false,
       'randomDefaults': randomDefaults,
+      'isNewGame'     : newGame,
       'players'       : {
         '1': {
           'userId'     : uid,
@@ -314,12 +316,11 @@ class LobbyRtdbService {
     });
   }
 
-  Future<bool> checkDefaultDims({
+  Future<bool> checkNewGame({
     required String sessionId,
   }) async {
-    final ref = _lobbyRef(sessionId);
-
-    final bool hasDefaults = (await ref.child('randomDefaults').get()).exists;
+    final DataSnapshot snapshot = await _lobbyRef(sessionId).child('isNewGame').get();
+    final bool hasDefaults = snapshot.exists && snapshot.value == true;
     return hasDefaults;
   }
 

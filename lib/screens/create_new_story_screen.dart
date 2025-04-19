@@ -142,6 +142,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         sessionId:      sessionId,
         hostName:       hostName,
         randomDefaults: _randomDefaults(),
+        newGame:        true,
       );
 
       // 3) Build minimal playersMap (host only)

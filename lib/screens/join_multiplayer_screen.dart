@@ -72,7 +72,7 @@ class _JoinMultiplayerScreenState extends State<JoinMultiplayerScreen> {
 
       // 3️⃣ Navigate into the voting screen
       if (!mounted) return;
-      bool isNewStory = await _lobbySvc.checkDefaultDims(sessionId: sessionId);
+      bool isNewStory = await _lobbySvc.checkNewGame(sessionId: sessionId);
       if(isNewStory){
 
         Navigator.pushReplacement(

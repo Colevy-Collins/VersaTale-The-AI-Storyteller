@@ -20,6 +20,7 @@ class StoryController with ChangeNotifier {
     required this.storyTitle,
     this.sessionId,
     this.joinCode,
+    this.onKicked,
     // DI (handy for tests)
     AuthService? authService,
     StoryService? storyService,
@@ -39,6 +40,7 @@ class StoryController with ChangeNotifier {
     _title   = storyTitle;
     _phase   = StoryPhase.story;
 
+
     // start RTDB listener for multiplayer
     if (isMultiplayer) {
       _lobbySub = _lobbySvc
@@ -53,6 +55,7 @@ class StoryController with ChangeNotifier {
   final String  storyTitle;
   final String? sessionId;
   final String? joinCode;
+  final VoidCallback? onKicked;
 
   // ───────────────────────── injected services ────────────────────────────
   final AuthService      _authSvc;
@@ -192,7 +195,8 @@ class StoryController with ChangeNotifier {
     final stillHere =
     _players.values.any((p) => p['userId'] == _currentUid);
     if (!stillHere) {
-      _error('You were removed from the session.');
+      _lobbySub?.cancel();
+      onKicked?.call();
     }
   }
 

@@ -74,6 +74,7 @@ class _StoryScreenState extends State<StoryScreen> {
       joinCode      : widget.joinCode,
       onError:   (m) => _showError(m),
       onInfo :   (m) => _showSnack(m),
+      onKicked      : _handleKick,
     );
 
     _txtCtrl = TextEditingController(text: ctrl.text);
@@ -117,6 +118,19 @@ class _StoryScreenState extends State<StoryScreen> {
       ),
     );
   }
+
+  // ─────────────────────────── UI: kick from session ─────────────────────────
+  void _handleKick() {
+    if (!mounted) return;
+
+    _showSnack('You were removed from the session.');
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomeScreen()),
+    );
+  }
+
 
   // ───────────────────────── previous‑leg confirmation ────────────────────────
   Future<void> _confirmAndGoBack() async {                         // ← new
@@ -191,6 +205,7 @@ class _StoryScreenState extends State<StoryScreen> {
           sessionId: newSessionId,
           hostName : hostName,
           randomDefaults: {},
+          newGame: false,
         );
 
         // 3) broadcast current solo story
