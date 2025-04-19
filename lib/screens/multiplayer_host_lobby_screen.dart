@@ -199,6 +199,7 @@ class _MultiplayerHostLobbyScreenState
     }
     _lastPhase = newPhase;
   }
+
   Future<void> _hostStartStory() async {
     if (!_isHost) return;
     if (_playersMap.length < 2) {

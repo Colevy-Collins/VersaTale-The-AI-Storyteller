@@ -70,18 +70,56 @@ class LobbyRtdbService {
     });
   }
 
-  /// Joiner: register self under next available slot.
+  /// Joiner: register self under next available slot,
+  /// but block duplicates and prevent host from joining.
   Future<void> joinSession({
     required String sessionId,
     required String displayName,
   }) async {
-    final uid       = FirebaseAuth.instance.currentUser!.uid;
-    final playersRef = FirebaseDatabase.instance.ref('lobbies/$sessionId/players');
+    final uid      = _auth.currentUser!.uid;
+    final lobbyRef = _lobbyRef(sessionId);
 
+    // 1) Host cannot join as player
+    final hostSnap = await lobbyRef.child('hostUid').get();
+    if (hostSnap.exists && hostSnap.value == uid) {
+      throw FirebaseException(
+        plugin: 'lobby_rtdb_service',
+        code: 'HOST_CANNOT_JOIN',
+        message: 'Host cannot join their own lobby as a player.',
+      );
+    }
+
+    // 2) Prevent duplicate player joins
+    final playersSnap = await lobbyRef.child('players').get();
+    if (playersSnap.exists && playersSnap.value != null) {
+      // normalize snapshot into a flat Map<String,dynamic>
+      final raw = playersSnap.value;
+      final Map<String, dynamic> flat = {};
+      if (raw is Map) {
+        flat.addAll(Map<String, dynamic>.from(raw));
+      } else if (raw is List) {
+        for (var i = 0; i < raw.length; i++) {
+          final e = raw[i];
+          if (e is Map) flat['$i'] = Map<String, dynamic>.from(e);
+        }
+      }
+
+      // if the UID is already in the list, block the join
+      if (flat.values.any((info) => info['userId'] == uid)) {
+        throw FirebaseException(
+          plugin: 'lobby_rtdb_service',
+          code: 'ALREADY_JOINED',
+          message: 'You’re already in this lobby. Ask the host to remove you before rejoining.',
+        );
+      }
+    }
+
+    // 3) Append as a new player slot
+    final playersRef = lobbyRef.child('players');
     await playersRef.runTransaction((currentData) {
-      // normalize whatever’s there into a Map<String,dynamic>
       final Map<String, dynamic> playersMap = {};
 
+      // normalize whatever’s there into playersMap
       if (currentData is Map) {
         currentData.forEach((k, v) => playersMap[k.toString()] = v);
       } else if (currentData is List) {
@@ -92,32 +130,21 @@ class LobbyRtdbService {
           }
         }
       }
-      // else: null or something else, start fresh
 
-      // update existing slot or append a new one
-      final existing = playersMap.entries.firstWhere(
-            (e) => e.value['userId'] == uid,
-        orElse: () => const MapEntry('', {}),
-      );
-      if (existing.key.isNotEmpty) {
-        playersMap[existing.key] = {
-          'userId'     : uid,
-          'displayName': displayName,
-        };
-      } else {
-        final next = playersMap.keys
-            .map((k) => int.tryParse(k) ?? 0)
-            .fold(0, (mx, n) => n > mx ? n : mx) + 1;
-        playersMap['$next'] = {
-          'userId'     : uid,
-          'displayName': displayName,
-        };
-      }
+      // compute next slot index
+      final next = playersMap.keys
+          .map((k) => int.tryParse(k) ?? 0)
+          .fold(0, (mx, n) => n > mx ? n : mx) + 1;
 
-      // return the new map for the transaction
+      playersMap['$next'] = {
+        'userId'     : uid,
+        'displayName': displayName,
+      };
+
       return Transaction.success(playersMap);
     });
   }
+
 
 
 

@@ -13,6 +13,7 @@ import '../services/story_service.dart';
 import '../services/lobby_rtdb_service.dart';
 import 'main_splash_screen.dart';
 import 'multiplayer_host_lobby_screen.dart';
+import 'dashboard_screen.dart';
 
 enum _MenuOption {
   backToScreen,
@@ -47,6 +48,7 @@ class _StoryScreenState extends State<StoryScreen> {
   final AuthService       _authSvc  = AuthService();
   final StoryService      _storySvc = StoryService();
   final LobbyRtdbService  _lobbySvc = LobbyRtdbService();
+  late final String _currentUid;
 
   final TextEditingController _textCtrl   = TextEditingController();
   final ScrollController      _scrollCtrl = ScrollController();
@@ -69,6 +71,7 @@ class _StoryScreenState extends State<StoryScreen> {
   @override
   void initState() {
     super.initState();
+    _currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     _textCtrl.text  = widget.initialLeg;
     _currentOptions = widget.options;
     _storyTitle     = widget.storyTitle;
@@ -135,6 +138,21 @@ class _StoryScreenState extends State<StoryScreen> {
         _storyTitle      = p['storyTitle'] as String;
       });
       _scrollCtrl.jumpTo(0);
+    }
+
+    // — DETECT A KICK: if my UID is no longer present
+    final stillHere = _players.values.any((p) => p['userId'] == _currentUid);
+    if (!stillHere) {
+      // stop listening
+      _lobbySub!.cancel();
+      // send me back to Dashboard
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+        );
+      }
+      return;
     }
   }
   Map<String,dynamic> _normalizePlayers(dynamic raw) {
