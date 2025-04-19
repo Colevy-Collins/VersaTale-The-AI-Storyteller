@@ -11,6 +11,13 @@ import '../constants/story_tokens.dart';      // kPreviousLegToken
 import '../services/auth_service.dart';
 import '../services/story_service.dart';
 import '../services/lobby_rtdb_service.dart';
+import '../utils/lobby_utils.dart';
+import '../utils/ui_utils.dart';
+import '../models/story_phase.dart';
+import '../widgets/action_button.dart';
+import '../widgets/story_text_area.dart';
+import '../widgets/next_action_sheet.dart';
+import '../widgets/full_story_dialog.dart';
 import 'main_splash_screen.dart';
 import 'multiplayer_host_lobby_screen.dart';
 import 'dashboard_screen.dart';
@@ -48,6 +55,7 @@ class _StoryScreenState extends State<StoryScreen> {
   final AuthService       _authSvc  = AuthService();
   final StoryService      _storySvc = StoryService();
   final LobbyRtdbService  _lobbySvc = LobbyRtdbService();
+  final LobbyUtils       _lobbyUtil = LobbyUtils();
   late final String _currentUid;
 
   final TextEditingController _textCtrl   = TextEditingController();
@@ -56,7 +64,7 @@ class _StoryScreenState extends State<StoryScreen> {
 
   late List<String> _currentOptions;
   String _storyTitle = 'Interactive Story';
-  String _phase      = 'story';   // story | storyVote | storyVoteResults
+  StoryPhase _phase  = StoryPhase.story;
   bool   _busy       = false;
   Map<String,dynamic> _players = {};
 
@@ -91,6 +99,9 @@ class _StoryScreenState extends State<StoryScreen> {
     super.dispose();
   }
 
+  void _showError(String msg) => context.showMessage(msg, isError: true);
+  void _showSnack(String msg) => context.showMessage(msg, isError: false);
+
   void _closeAnyOptionSheet() {
     while (ModalRoute.of(context)?.isCurrent == false) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -107,22 +118,23 @@ class _StoryScreenState extends State<StoryScreen> {
     }
 
     // 1️⃣ players
-    _players = _normalizePlayers(root['players']);
+    _players = LobbyUtils.normalizePlayers(root['players']);
 
     // 2️⃣ phase change
-    final newPhase = root['phase']?.toString() ?? 'story';
+    final newPhase = StoryPhaseParsing.fromString(
+        root['phase']?.toString() ?? '');
     final phaseChanged = newPhase != _phase;
 
     // → only close when we've moved into vote‑results
-    if (phaseChanged && newPhase == 'storyVoteResults') {
+    if (phaseChanged && newPhase == StoryPhase.results) {
       _closeAnyOptionSheet();
     }
 
     if (phaseChanged) setState(() => _phase = newPhase);
 
     // 3️⃣ host auto‑resolve
-    if (_phase == 'storyVote' && _isHost && !_busy) {
-      final voteCount   = _normalizePlayers(root['storyVotes']).length;
+    if (_phase == StoryPhase.vote && _isHost && !_busy) {
+      final voteCount   = LobbyUtils.normalizePlayers(root['storyVotes']).length;
       final playerCount = _players.length;
       if (playerCount > 0 && voteCount >= playerCount) {
         _resolveAndAdvance();
@@ -130,7 +142,7 @@ class _StoryScreenState extends State<StoryScreen> {
     }
 
     // 4️⃣ payload update
-    if (_phase == 'story' && root['storyPayload'] != null) {
+    if (_phase == StoryPhase.story && root['storyPayload'] != null) {
       final p = (root['storyPayload'] as Map).cast<String,dynamic>();
       setState(() {
         _textCtrl.text   = p['initialLeg'] as String;
@@ -155,26 +167,13 @@ class _StoryScreenState extends State<StoryScreen> {
       return;
     }
   }
-  Map<String,dynamic> _normalizePlayers(dynamic raw) {
-    final out = <String,dynamic>{};
-    if (raw is Map) {
-      raw.forEach((k,v) => out[k.toString()] = v);
-    } else if (raw is List) {
-      for (var i = 0; i < raw.length; i++) {
-        final e = raw[i];
-        if (e is Map) out['$i'] = e;
-      }
-    }
-    return out;
-  }
-
   Future<void> _rollbackToStoryPhase() async {
-    if (mounted) setState(() => _phase = 'story');
+    if (mounted) setState(() => _phase = StoryPhase.story);
     if (_isMultiplayer) {
       try {
         await _lobbySvc.updatePhase(
           sessionId: widget.sessionId!,
-          phase: 'story',
+          phase: StoryPhase.story.asString,
         );
       } catch (_) {}
     }
@@ -187,25 +186,19 @@ class _StoryScreenState extends State<StoryScreen> {
     final raw  = snap.value;
     if (raw is! Map) return;
 
-    final players = _normalizePlayers(raw['players']);
-    final votes   = _normalizePlayers(raw['storyVotes']);
-    final phase   = raw['phase']?.toString() ?? '';
+    final players = LobbyUtils.normalizePlayers(raw['players']);
+    final votes   = LobbyUtils.normalizePlayers(raw['storyVotes']);
+    final phaseEnum = StoryPhaseParsing.fromString(
+        raw['phase']?.toString() ?? '');
 
-    if (phase == 'storyVote' &&
+    if (phaseEnum == StoryPhase.vote &&
         players.isNotEmpty &&
         votes.length >= players.length) {
       await _resolveAndAdvance();
     }
   }
 
-  void _showError(String msg) => _showSnack(msg, isError: true);
-  void _showSnack(String msg, {bool isError = false}) =>
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg, style: GoogleFonts.atma()),
-          backgroundColor: isError ? Colors.red : null,
-        ),
-      );
+
 
   Future<void> _hostBringEveryoneBack() async {
     if (!_isHost || widget.sessionId == null) return;
@@ -215,7 +208,7 @@ class _StoryScreenState extends State<StoryScreen> {
       // 2 flip back to story phase
       await _lobbySvc.updatePhase(
         sessionId: widget.sessionId!,
-        phase: 'story',
+        phase: StoryPhase.story.asString,
       );
     } catch (e) {
       _showError('Error bringing everyone back: $e');
@@ -264,7 +257,7 @@ class _StoryScreenState extends State<StoryScreen> {
     try {
       await _lobbySvc.updatePhase(
         sessionId: widget.sessionId!,
-        phase: 'storyVoteResults',
+        phase: StoryPhase.results.asString,
       );
       print(2);
       final winner = await _lobbySvc.resolveStoryVotes(widget.sessionId!);
@@ -300,12 +293,12 @@ class _StoryScreenState extends State<StoryScreen> {
 
   Future<void> _onNextSelected(String decision) async {
     // 1) first tap in multiplayer → open vote phase + submit
-    if (_isMultiplayer && _phase == 'story') {
+    if (_isMultiplayer && _phase == StoryPhase.story) {
       setState(() => _busy = true);
       try {
         await _lobbySvc.updatePhase(
           sessionId: widget.sessionId!,
-          phase    : 'storyVote',
+          phase    : StoryPhase.vote.asString,
         );
         await _submitVote(decision);
       } catch (e) {
@@ -318,7 +311,7 @@ class _StoryScreenState extends State<StoryScreen> {
     }
 
     // 2) already voting → change vote
-    if (_isMultiplayer && _phase == 'storyVote') {
+    if (_isMultiplayer && _phase == StoryPhase.vote) {
       await _submitVote(decision);
       return;
     }
@@ -377,10 +370,11 @@ class _StoryScreenState extends State<StoryScreen> {
       );
       final txt = r['initialLeg'] ?? 'Story will appear here.';
       final ops = List<String>.from(r['options'] ?? []);
-      final canPick = !_busy && (_phase == 'story' || _phase == 'storyVote');
+      final canPick = !_busy
+         && (_phase == StoryPhase.story || _phase == StoryPhase.vote);
       showDialog(
         context: context,
-        builder: (_) => _FullStoryDialog(
+        builder: (_) => FullStoryDialog(
           fullStory       : txt,
           dialogOptions   : ops,
           canPick         : canPick,
@@ -447,7 +441,7 @@ class _StoryScreenState extends State<StoryScreen> {
         // 5) Flip the phase to 'lobby' using the NEW sessionId
         await _lobbySvc.updatePhase(
           sessionId: newSessionId,
-          phase:     'lobby',
+          phase:     StoryPhase.lobby.asString,
         );
 
         // 6) Navigate into the host lobby screen
@@ -476,7 +470,7 @@ class _StoryScreenState extends State<StoryScreen> {
 
         await _lobbySvc.updatePhase(
           sessionId: existingSession,
-          phase:     'lobby',
+          phase:     StoryPhase.lobby.asString,
         );
 
         if (!mounted) return;
@@ -502,14 +496,28 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext ctx) {
-    // allow voting only when:
-    //  • not busy
-    //  • in the “story” or “storyVote” phase
-    //  • nobody is currently in the lobby
+  void _showOptionSheet(BuildContext ctx) {
     final canPick = !_busy
-        && (_phase == 'story' || _phase == 'storyVote')
+        && (_phase == StoryPhase.story || _phase == StoryPhase.vote)
+        && _inLobbyCount == 0;
+    if (!canPick) return;
+
+    showModalBottomSheet(
+      context: ctx,
+      builder: (_) => NextActionSheet(
+        options: _currentOptions,
+        busy: _busy,
+        onPrevious: _confirmAndGoBack,
+        onSelect: _onNextSelected,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // when the “Choose Next Action” button is enabled
+    final canPick = !_busy
+        && (_phase == StoryPhase.story || _phase == StoryPhase.vote)
         && _inLobbyCount == 0;
 
     return Scaffold(
@@ -556,29 +564,30 @@ class _StoryScreenState extends State<StoryScreen> {
                   break;
               }
             },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
+            itemBuilder: (_) => const [
+              PopupMenuItem(
                   value: _MenuOption.backToScreen,
-                  child: Text('Back a Screen', style: TextStyle())),
-              const PopupMenuItem(
+                  child: Text('Back a Screen')),
+              PopupMenuItem(
                   value: _MenuOption.startGroupStory,
                   child: Text('Start Group Story')),
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: _MenuOption.viewFullStory,
                   child: Text('View Full Story')),
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: _MenuOption.saveStory,
                   child: Text('Save Story')),
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: _MenuOption.logout,
                   child: Text('Logout')),
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: _MenuOption.closeMenu,
                   child: Text('Close Menu')),
             ],
           ),
         ],
       ),
+
       body: LayoutBuilder(
         builder: (_, __) => Center(
           child: ConstrainedBox(
@@ -587,66 +596,35 @@ class _StoryScreenState extends State<StoryScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Story text area
+                  // ─── story text area ───
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Scrollbar(
-                        controller: _scrollCtrl,
-                        child: SingleChildScrollView(
-                          controller: _scrollCtrl,
-                          child: TextField(
-                            controller: _textCtrl,
-                            maxLines: null,
-                            readOnly: true,
-                            decoration: const InputDecoration.collapsed(
-                                hintText: 'Story will appear here…'),
-                            style: GoogleFonts.atma(),
-                          ),
-                        ),
-                      ),
+                    child: StoryTextArea(
+                      controller: _scrollCtrl,
+                      textController: _textCtrl,
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
-                  // Choose Next Action (voting) button
-                  ElevatedButton(
-                    onPressed: canPick ? () => _showOptionSheet(ctx) : null,
-                    style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48)),
-                    child: _busy
-                        ? const CircularProgressIndicator()
-                        : Text(
-                      'Choose Next Action',
-                      style: GoogleFonts.atma(
-                          fontWeight: FontWeight.bold),
-                    ),
+                  // ─── choose next action ───
+                  ActionButton(
+                    label: 'Choose Next Action',
+                    busy: _busy,
+                    onPressed: canPick ? () => _showOptionSheet(context) : null,
                   ),
 
-                  // NEW: host “Take Everyone to Story” button
-                  if (_isMultiplayer && _isHost && (_inLobbyCount > 0 || _phase == "lobby")) ...[
+                  // ─── host “take everyone back” ───
+                  if (_isMultiplayer && _isHost && (_inLobbyCount > 0 || _phase == StoryPhase.lobby)) ...[
                     const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: _busy ? null : _hostBringEveryoneBack,
-                      style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48)),
-                      child: _busy
-                          ? const CircularProgressIndicator()
-                          : Text(
-                        'Take Everyone to Story',
-                        style: GoogleFonts.atma(
-                            fontWeight: FontWeight.bold),
-                      ),
+                    ActionButton(
+                      label: 'Take Everyone to Story',
+                      busy: _busy,
+                      onPressed: _hostBringEveryoneBack,
                     ),
                   ],
 
-                  // Waiting / Resolve votes UI
-                  if (_isMultiplayer && _phase == 'storyVote') ...[
+                  // ─── voting in progress UI ───
+                  if (_isMultiplayer && _phase == StoryPhase.vote) ...[
                     const SizedBox(height: 20),
                     _busy
                         ? const CircularProgressIndicator()
@@ -657,15 +635,10 @@ class _StoryScreenState extends State<StoryScreen> {
                     ),
                     if (_isHost && !_busy) ...[
                       const SizedBox(height: 10),
-                      ElevatedButton(
+                      ActionButton(
+                        label: 'Resolve Votes',
+                        busy: _busy,
                         onPressed: _resolveAndAdvance,
-                        style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48)),
-                        child: Text(
-                          'Resolve Votes',
-                          style: GoogleFonts.atma(
-                              fontWeight: FontWeight.bold),
-                        ),
                       ),
                     ],
                   ],
@@ -677,114 +650,4 @@ class _StoryScreenState extends State<StoryScreen> {
       ),
     );
   }
-
-
-  void _showOptionSheet(BuildContext ctx) {
-    final canPick = !_busy && (_phase == 'story' || _phase == 'storyVote');
-    if (!canPick) return;
-
-    showModalBottomSheet(
-      context: ctx,
-      builder: (_) => Container(
-        height: 300,
-        child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          children: [
-            ElevatedButton(
-              onPressed: _busy
-                  ? null
-                  : () {
-                Navigator.pop(ctx);
-                _confirmAndGoBack();
-              },
-              style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48)),
-              child: Text('Previous Leg',
-                  style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 8),
-            ..._currentOptions.map((choice) {
-              final isFinal = choice == 'The story ends';
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: ElevatedButton(
-                  onPressed: (_busy || isFinal)
-                      ? null
-                      : () {
-                    Navigator.pop(ctx);
-                    _onNextSelected(choice);
-                  },
-                  style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48)),
-                  child: Text(
-                    isFinal ? 'The story ends' : choice,
-                    style: GoogleFonts.atma(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              );
-            }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FullStoryDialog extends StatefulWidget {
-  final String fullStory;
-  final List<String> dialogOptions;
-  final ValueChanged<String> onOptionSelected;
-  final VoidCallback onShowOptions;
-  final bool canPick;
-
-  const _FullStoryDialog({
-    Key? key,
-    required this.fullStory,
-    required this.dialogOptions,
-    required this.onOptionSelected,
-    required this.onShowOptions,
-    required this.canPick,
-  }) : super(key: key);
-
-  @override
-  State<_FullStoryDialog> createState() => _FullStoryDialogState();
-}
-
-class _FullStoryDialogState extends State<_FullStoryDialog> {
-  final ScrollController _ctrl = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_ctrl.hasClients) _ctrl.jumpTo(_ctrl.position.maxScrollExtent);
-    });
-  }
-
-  @override
-  Widget build(BuildContext dialogCtx) => AlertDialog(
-    title: Text('Full Story So Far', style: GoogleFonts.atma()),
-    content: Container(
-      height: 300,
-      width: double.maxFinite,
-      child: Scrollbar(
-        controller: _ctrl,
-        child: SingleChildScrollView(
-          controller: _ctrl,
-          child: Text(widget.fullStory, style: GoogleFonts.atma()),
-        ),
-      ),
-    ),
-    actions: [
-      if (widget.dialogOptions.isNotEmpty)
-        ElevatedButton(
-          onPressed: widget.canPick ? widget.onShowOptions : null,
-          child: Text('Choose Next Action', style: GoogleFonts.atma()),
-        ),
-      TextButton(
-        onPressed: () => Navigator.pop(dialogCtx),
-        child: Text('Close', style: GoogleFonts.atma()),
-      ),
-    ],
-  );
 }
