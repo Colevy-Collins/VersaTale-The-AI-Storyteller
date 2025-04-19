@@ -19,20 +19,49 @@ class LobbyRtdbService {
   final _auth = FirebaseAuth.instance;
 
   DatabaseReference _lobbyRef(String sessionId) => _db.ref('lobbies/$sessionId');
-  /// Host: create/seed a new lobby in RTDB.
+  /// Root reference to all lobbies in RTDB
+  DatabaseReference get _lobbiesRoot => _db.ref('lobbies');
+
+  /// Returns true if the current user is already the host of an existing lobby.
+  Future<bool> _isAlreadyHosting() async {
+    final uid = _auth.currentUser!.uid;
+    final snap = await _lobbiesRoot
+        .orderByChild('hostUid')
+        .equalTo(uid)
+        .limitToFirst(1)
+        .get();
+    return snap.exists && snap.value != null;
+  }
+
+  /// Host: create/seed a new lobby in RTDB, replacing any existing one you host.
   Future<void> createSession({
     required String sessionId,
     required String hostName,
     required Map<String, String> randomDefaults,
   }) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = FirebaseDatabase.instance.ref('lobbies/$sessionId');
+    final uid = _auth.currentUser!.uid;
 
+    // 1) Find & remove any lobby this user is already hosting
+    final existingSnap = await _lobbiesRoot
+        .orderByChild('hostUid')
+        .equalTo(uid)
+        .limitToFirst(1)
+        .get();
+    if (existingSnap.exists) {
+      final oldSessionId = existingSnap.children.first.key;
+      if (oldSessionId != null) {
+        await _lobbiesRoot.child(oldSessionId).remove();
+      }
+    }
+
+    // 2) Seed the new lobby
+    final ref = _db.ref('lobbies/$sessionId');
     await ref.set({
-      'phase'        : 'lobby',
-      'votesResolved': false,
+      'hostUid'       : uid,
+      'phase'         : 'lobby',
+      'votesResolved' : false,
       'randomDefaults': randomDefaults,
-      'players' : {
+      'players'       : {
         '1': {
           'userId'     : uid,
           'displayName': hostName,
