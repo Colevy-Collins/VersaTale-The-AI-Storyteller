@@ -70,6 +70,7 @@ class _HostStoryConfigState extends State<HostStoryConfig> {
         sessionId: sessionId,
         hostName: hostName,
         randomDefaults: _randomDefaults(),
+        newGame: true,
       );
 
       // 3) navigate to lobby screen
