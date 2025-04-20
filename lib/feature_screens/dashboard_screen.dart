@@ -1,6 +1,8 @@
+// lib/screens/dashboard_screen.dart
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'login_screens/main_splash_screen.dart';
 import 'new_story_screens/create_new_story_screen.dart';
 import 'story_archives_screen.dart';
@@ -13,88 +15,63 @@ import 'profile_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
+  // ───────────────────── navigation helpers ──────────────────────
   void _navigateToProfile(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
+      MaterialPageRoute(builder: (_) => const ProfileScreen()),
     );
   }
 
   void _navigateToSavedStories(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ViewStoriesScreen()),
+      MaterialPageRoute(builder: (_) => const ViewStoriesScreen()),
     );
   }
 
-  /// Navigate to the create story screen, passing `isGroup`.
   void _navigateToNewStoryWithMode(BuildContext context, bool isGroup) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CreateNewStoryScreen(isGroup: isGroup),
+        builder: (_) => CreateNewStoryScreen(isGroup: isGroup),
       ),
     );
   }
 
-  /// Navigate to continue an active story, passing `isGroup`.
-  void _navigateToActiveStoryWithMode(BuildContext context, bool isGroup) async {
+  Future<void> _navigateToActiveStoryWithMode(
+      BuildContext context, bool isGroup) async {
     final storyService = StoryService();
     try {
-      final activeStory = await storyService.getActiveStory();
-      if (activeStory != null) {
+      final active = await storyService.getActiveStory();
+      if (active != null) {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => StoryScreen(
-              initialLeg: activeStory['storyLeg'] ?? "",
-              options: List<String>.from(activeStory['options'] ?? []),
-              storyTitle: activeStory["storyTitle"] ?? "",
+              initialLeg : active['storyLeg']   ?? '',
+              options    : List<String>.from(active['options'] ?? []),
+              storyTitle : active['storyTitle'] ?? '',
             ),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              "No active story found.",
-              style: GoogleFonts.atma(),
-            ),
+            content: Text('No active story found.', style: GoogleFonts.atma()),
           ),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            "Error resuming active story: $e",
-            style: GoogleFonts.atma(),
-          ),
+          content:
+          Text('Error resuming active story: $e', style: GoogleFonts.atma()),
         ),
       );
     }
   }
 
-  /// Opens a dialog that prompts the user for story mode and action (start or continue).
-  void _showStoryOptionsDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StoryOptionsDialog(
-          onStartStory: (isGroup) {
-            Navigator.pop(context); // Close dialog
-            _navigateToNewStoryWithMode(context, isGroup);
-          },
-          onContinueStory: (isGroup) {
-            Navigator.pop(context); // Close dialog
-            _navigateToActiveStoryWithMode(context, isGroup);
-          },
-        );
-      },
-    );
-  }
-
-  /// Navigate to the multiplayer join screen.
   void _navigateToJoinFriend(BuildContext context) {
     Navigator.push(
       context,
@@ -102,46 +79,65 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // ───────────────── dialog launcher ─────────────────────────────
+  void _showStoryOptionsDialog(BuildContext ctx) {
+    showDialog(
+      context: ctx,
+      builder: (_) => StoryOptionsDialog(
+        onStartStory: (isGroup) async {
+          Navigator.of(ctx).pop();                // close dialog
+          await Future.delayed(Duration.zero);    // ← lets pop complete
+          _navigateToNewStoryWithMode(ctx, isGroup);
+        },
+        onContinueStory: (isGroup) async {
+          Navigator.of(ctx).pop();
+          await Future.delayed(Duration.zero);    // ← fixes double‑tap issue
+          _navigateToActiveStoryWithMode(ctx, isGroup);
+        },
+      ),
+    );
+  }
+
+  // ─────────────────────── build ────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double screenWidth = constraints.maxWidth;
-        final double titleFontSize = min(screenWidth * 0.10, 80.0);
-        final double buttonFontSize = min(screenWidth * 0.04, 20.0);
-        final double logoutFontSize = min(screenWidth * 0.03, 16.0);
+        final w = constraints.maxWidth;
+        final titleSize   = min(w * 0.10, 80.0);
+        final buttonSize  = min(w * 0.04, 20.0);
+        final logoutSize  = min(w * 0.03, 16.0);
 
         return Scaffold(
           body: Stack(
             children: [
-              // Background image
+              // background
               Positioned.fill(
                 child: Container(
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage("assets/versatale_dashboard2_image.png"),
+                      image: AssetImage('assets/versatale_dashboard2_image.png'),
                       fit: BoxFit.cover,
-                      alignment: Alignment.center,
                     ),
                   ),
                 ),
               ),
 
-              // Main content
+              // main content
               Positioned.fill(
                 child: SingleChildScrollView(
-                  child: Container(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: ConstrainedBox(
+                    constraints:
+                    BoxConstraints(minHeight: constraints.maxHeight),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(height: 80),
-
-                        // Title
+                        // title
                         Text(
-                          "VersaTale",
+                          'VersaTale',
                           style: GoogleFonts.atma(
-                            fontSize: titleFontSize,
+                            fontSize: titleSize,
                             fontWeight: FontWeight.bold,
                             foreground: Paint()
                               ..style = PaintingStyle.stroke
@@ -149,16 +145,15 @@ class HomeScreen extends StatelessWidget {
                               ..color = Colors.white,
                             shadows: const [
                               Shadow(
-                                offset: Offset(2.0, 2.0),
-                                blurRadius: 3.0,
+                                offset: Offset(2, 2),
+                                blurRadius: 3,
                                 color: Colors.black26,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 40),
-
-                        // Main menu buttons
+                        // buttons
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
@@ -166,31 +161,30 @@ class HomeScreen extends StatelessWidget {
                           children: [
                             _buildButton(
                               context,
-                              "Story Archives",
+                              'Story Archives',
                               onPressed: () => _navigateToSavedStories(context),
-                              fontSize: buttonFontSize,
+                              fontSize: buttonSize,
                             ),
                             _buildButton(
                               context,
-                              "New Story",
+                              'New Story',
                               onPressed: () => _showStoryOptionsDialog(context),
-                              fontSize: buttonFontSize,
+                              fontSize: buttonSize,
                             ),
                             _buildButton(
                               context,
-                              "Manage Profile",
+                              'Manage Profile',
                               onPressed: () => _navigateToProfile(context),
-                              fontSize: buttonFontSize,
+                              fontSize: buttonSize,
                             ),
                             _buildButton(
                               context,
-                              "Join a Friend",
+                              'Join a Friend',
                               onPressed: () => _navigateToJoinFriend(context),
-                              fontSize: buttonFontSize,
+                              fontSize: buttonSize,
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 80),
                       ],
                     ),
@@ -198,27 +192,31 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
-              // Logout button
+              // logout
               Positioned(
                 top: 20,
                 left: 16,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     backgroundColor: Colors.white.withOpacity(0.7),
                   ),
                   onPressed: () async {
                     await AuthService().signOut();
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const MainSplashScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const MainSplashScreen()),
                     );
                   },
                   child: Text(
-                    "Log Out",
+                    'Log Out',
                     style: GoogleFonts.atma(
-                      fontSize: logoutFontSize,
+                      fontSize: logoutSize,
                       fontWeight: FontWeight.bold,
                       color: const Color(0xFF453E2C),
                     ),
@@ -232,6 +230,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // helper to build translucent buttons
   Widget _buildButton(
       BuildContext context,
       String label, {
@@ -240,9 +239,7 @@ class HomeScreen extends StatelessWidget {
       }) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         backgroundColor: Colors.white.withOpacity(0.7),
       ),
@@ -259,45 +256,47 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Dialog for choosing Solo/Group, plus Start or Continue.
-class StoryOptionsDialog extends StatefulWidget {
-  final Function(bool isGroup) onStartStory;
-  final Function(bool isGroup) onContinueStory;
+// ───────────────────────── dialog widget ────────────────────────
 
+class StoryOptionsDialog extends StatefulWidget {
   const StoryOptionsDialog({
     Key? key,
     required this.onStartStory,
     required this.onContinueStory,
   }) : super(key: key);
 
+  final Function(bool isGroup) onStartStory;
+  final Function(bool isGroup) onContinueStory;
+
   @override
-  _StoryOptionsDialogState createState() => _StoryOptionsDialogState();
+  State<StoryOptionsDialog> createState() => _StoryOptionsDialogState();
 }
 
 class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
-  bool isGroup = false; // false => Solo, true => Group
+  bool _isGroup = false; // false => Solo, true => Group
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text("Story Options", style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+      title: Text('Story Options',
+          style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            title: Text("Solo Story", style: GoogleFonts.atma()),
+            title: Text('Solo Story', style: GoogleFonts.atma()),
             leading: Radio<bool>(
               value: false,
-              groupValue: isGroup,
-              onChanged: (val) => setState(() => isGroup = val!),
+              groupValue: _isGroup,
+              onChanged: (val) => setState(() => _isGroup = val!),
             ),
           ),
           ListTile(
-            title: Text("Group Story", style: GoogleFonts.atma()),
+            title: Text('Group Story', style: GoogleFonts.atma()),
             leading: Radio<bool>(
               value: true,
-              groupValue: isGroup,
-              onChanged: (val) => setState(() => isGroup = val!),
+              groupValue: _isGroup,
+              onChanged: (val) => setState(() => _isGroup = val!),
             ),
           ),
         ],
@@ -305,15 +304,15 @@ class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text("Cancel", style: GoogleFonts.atma()),
+          child: Text('Cancel', style: GoogleFonts.atma()),
         ),
         ElevatedButton(
-          onPressed: () => widget.onStartStory(isGroup),
-          child: Text("Start Story", style: GoogleFonts.atma()),
+          onPressed: () => widget.onStartStory(_isGroup),
+          child: Text('Start Story', style: GoogleFonts.atma()),
         ),
         ElevatedButton(
-          onPressed: () => widget.onContinueStory(isGroup),
-          child: Text("Continue Story", style: GoogleFonts.atma()),
+          onPressed: () => widget.onContinueStory(_isGroup),
+          child: Text('Continue Story', style: GoogleFonts.atma()),
         ),
       ],
     );

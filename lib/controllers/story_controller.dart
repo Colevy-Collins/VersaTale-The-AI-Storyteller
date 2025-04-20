@@ -113,7 +113,10 @@ class StoryController with ChangeNotifier {
       if (isMultiplayer) {
         if (_phase == StoryPhase.story) {
           await _lobbySvc.updatePhase(
-              sessionId: sessionId!, phase: StoryPhase.vote.asString);
+              sessionId: sessionId!,
+              phase: StoryPhase.vote.asString,
+              isNewGame: false
+          );
           await _submitVote(decision);
         } else if (_phase == StoryPhase.vote) {
           await _submitVote(decision);
@@ -138,18 +141,25 @@ class StoryController with ChangeNotifier {
 
   Future<void> hostBringEveryoneBack() async {
     if (!isHost || !isMultiplayer) return;
+
     _setBusy(true);
     try {
-      await _lobbySvc.updatePhase(
+      // Broadcast the current story payload and reset lobby count & phase in one call:
+      await _lobbySvc.advanceToStoryPhase(
         sessionId: sessionId!,
-        phase: StoryPhase.story.asString,
+        storyPayload: {
+          'initialLeg': _text,
+          'options'   : List<String>.from(_options),
+          'storyTitle': _title,
+        },
       );
     } catch (e) {
-      _error('$e');
+      _error('Error bringing players back: $e');
     } finally {
       _setBusy(false);
     }
   }
+
 
   // ───────────────────────── RTDB listener ────────────────────────────────
   void _onLobbyUpdate(DatabaseEvent event) {
@@ -268,6 +278,7 @@ class StoryController with ChangeNotifier {
       await _lobbySvc.updatePhase(
         sessionId: sessionId!,
         phase: StoryPhase.results.asString,
+        isNewGame: false
       );
 
       final winner = await _lobbySvc.resolveStoryVotes(sessionId!);
@@ -300,6 +311,7 @@ class StoryController with ChangeNotifier {
         await _lobbySvc.updatePhase(
           sessionId: sessionId!,
           phase: StoryPhase.story.asString,
+          isNewGame: false
         );
       } catch (_) {}
     }

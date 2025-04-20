@@ -1,221 +1,198 @@
 // lib/services/lobby_rtdb_service.dart
-// -----------------------------------------------------------------------------
-// Service for managing multiplayer lobbies via Firebase Realtime Database.
-// • Host seeds lobby: players/1, randomDefaults, phase, votesResolved
-// • Joiners register under players/N
-// • Players submit votes under votes/{uid}
-// • Host resolves votes client‑side and writes resolvedDimensions + phase
-// • Host advances to story by writing storyPayload + phase
-// • All clients subscribe via lobbyStream to react in real‑time
-// -----------------------------------------------------------------------------
-
 import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../constants/story_tokens.dart';
 
+/// Thrown on any RTDB or auth error in LobbyService.
+class LobbyException implements Exception {
+  final String message;
+  LobbyException(this.message);
+  @override
+  String toString() => message;
+}
+
 class LobbyRtdbService {
   final _db   = FirebaseDatabase.instance;
   final _auth = FirebaseAuth.instance;
 
-  DatabaseReference _lobbyRef(String sessionId) => _db.ref('lobbies/$sessionId');
-  /// Root reference to all lobbies in RTDB
-  DatabaseReference get _lobbiesRoot => _db.ref('lobbies');
-
-  /// Returns true if the current user is already the host of an existing lobby.
-  Future<bool> _isAlreadyHosting() async {
-    final uid = _auth.currentUser!.uid;
-    final snap = await _lobbiesRoot
-        .orderByChild('hostUid')
-        .equalTo(uid)
-        .limitToFirst(1)
-        .get();
-    return snap.exists && snap.value != null;
+  /// Throws if there is no signed-in user.
+  String get _uid {
+    final user = _auth.currentUser;
+    if (user == null) throw LobbyException('User is not authenticated.');
+    return user.uid;
   }
 
-  /// Host: create/seed a new lobby in RTDB, replacing any existing one you host.
+  DatabaseReference _lobbyRef(String sessionId) =>
+      _db.ref('lobbies/$sessionId');
+  DatabaseReference get _lobbiesRoot => _db.ref('lobbies');
+
+  /// Map known RTDB or custom plugin error codes to friendly messages.
+  String _getFriendlyErrorMessage(FirebaseException e) {
+    switch (e.code) {
+      case 'HOST_CANNOT_JOIN':
+        return 'You cannot join your own lobby. Create a different session or ask someone else to host.';
+      case 'ALREADY_JOINED':
+        return 'You’re already in this lobby. Ask the host to remove you before rejoining.';
+      case 'permission-denied':
+        return 'You do not have permission to perform this action.';
+      case 'network-error':
+        return 'Network error. Please check your connection and try again.';
+      case 'network-request-failed':
+        return 'Network error. Please check your connection and try again.';
+      case 'database-read-only':
+        return 'The lobby is currently read‑only. Try again later.';
+      default:
+        return e.message ?? 'Unexpected error [${e.code}].';
+    }
+  }
+
+  /// Generic runner that catches and wraps Firebase errors.
+  Future<T> _run<T>(Future<T> Function() fn) async {
+    try {
+      return await fn();
+    } on FirebaseException catch (e) {
+      throw LobbyException(_getFriendlyErrorMessage(e));
+    } catch (e) {
+      throw LobbyException(e.toString());
+    }
+  }
+
+  /// Normalize RTDB snapshot value into a flat String→dynamic map.
+  Map<String, dynamic> _normalizeMap(dynamic raw) {
+    final map = <String, dynamic>{};
+    if (raw is Map) {
+      map.addAll(Map<String, dynamic>.from(raw));
+    } else if (raw is List) {
+      for (var i = 0; i < raw.length; i++) {
+        final entry = raw[i];
+        if (entry is Map) map['$i'] = Map<String, dynamic>.from(entry);
+      }
+    }
+    return map;
+  }
+
+  Future<bool> _isAlreadyHosting() => _run<bool>(() async {
+    final snap = await _lobbiesRoot
+        .orderByChild('hostUid')
+        .equalTo(_uid)
+        .limitToFirst(1)
+        .get();
+    return snap.exists;
+  });
+
   Future<void> createSession({
     required String sessionId,
     required String hostName,
     required Map<String, String> randomDefaults,
-    required bool newGame
-  }) async {
-    final uid = _auth.currentUser!.uid;
-
-    // 1) Find & remove any lobby this user is already hosting
-    final existingSnap = await _lobbiesRoot
+    required bool newGame,
+  }) => _run<void>(() async {
+    // Remove existing lobby you host
+    final existing = await _lobbiesRoot
         .orderByChild('hostUid')
-        .equalTo(uid)
+        .equalTo(_uid)
         .limitToFirst(1)
         .get();
-    if (existingSnap.exists) {
-      final oldSessionId = existingSnap.children.first.key;
-      if (oldSessionId != null) {
-        await _lobbiesRoot.child(oldSessionId).remove();
+    if (existing.exists) {
+      final oldId = existing.children.first.key;
+      if (oldId != null) {
+        await _lobbiesRoot.child(oldId).remove();
       }
     }
-
-    // 2) Seed the new lobby
-    final ref = _db.ref('lobbies/$sessionId');
-    await ref.set({
-      'hostUid'       : uid,
-      'phase'         : 'lobby',
-      'votesResolved' : false,
+    // Seed new lobby
+    await _lobbyRef(sessionId).set({
+      'hostUid': _uid,
+      'phase': 'lobby',
+      'votesResolved': false,
       'randomDefaults': randomDefaults,
-      'isNewGame'     : newGame,
-      'players'       : {
+      'isNewGame': newGame,
+      'players': {
         '1': {
-          'userId'     : uid,
+          'userId': _uid,
           'displayName': hostName,
         }
-      }
+      },
     });
-  }
+  });
 
-  /// Joiner: register self under next available slot,
-  /// but block duplicates and prevent host from joining.
   Future<void> joinSession({
     required String sessionId,
     required String displayName,
-  }) async {
-    final uid      = _auth.currentUser!.uid;
-    final lobbyRef = _lobbyRef(sessionId);
+  }) => _run<void>(() async {
+    final lobby = _lobbyRef(sessionId);
 
-    // 1) Host cannot join as player
-    final hostSnap = await lobbyRef.child('hostUid').get();
-    if (hostSnap.exists && hostSnap.value == uid) {
+    // 1) Host can’t join
+    final hostSnap = await lobby.child('hostUid').get();
+    if (hostSnap.value == _uid) {
       throw FirebaseException(
         plugin: 'lobby_rtdb_service',
         code: 'HOST_CANNOT_JOIN',
-        message: 'Host cannot join their own lobby as a player.',
+        message: 'Host cannot join their own lobby.',
       );
     }
 
-    // 2) Prevent duplicate player joins
-    final playersSnap = await lobbyRef.child('players').get();
-    if (playersSnap.exists && playersSnap.value != null) {
-      // normalize snapshot into a flat Map<String,dynamic>
-      final raw = playersSnap.value;
-      final Map<String, dynamic> flat = {};
-      if (raw is Map) {
-        flat.addAll(Map<String, dynamic>.from(raw));
-      } else if (raw is List) {
-        for (var i = 0; i < raw.length; i++) {
-          final e = raw[i];
-          if (e is Map) flat['$i'] = Map<String, dynamic>.from(e);
-        }
-      }
-
-      // if the UID is already in the list, block the join
-      if (flat.values.any((info) => info['userId'] == uid)) {
-        throw FirebaseException(
-          plugin: 'lobby_rtdb_service',
-          code: 'ALREADY_JOINED',
-          message: 'You’re already in this lobby. Ask the host to remove you before rejoining.',
-        );
-      }
+    // 2) Prevent duplicate
+    final playersSnap = await lobby.child('players').get();
+    final players = _normalizeMap(playersSnap.value);
+    if (players.values.any((p) => p['userId'] == _uid)) {
+      throw FirebaseException(
+        plugin: 'lobby_rtdb_service',
+        code: 'ALREADY_JOINED',
+        message: 'You’re already in this lobby.',
+      );
     }
 
-    // 3) Append as a new player slot
-    final playersRef = lobbyRef.child('players');
-    await playersRef.runTransaction((currentData) {
-      final Map<String, dynamic> playersMap = {};
-
-      // normalize whatever’s there into playersMap
-      if (currentData is Map) {
-        currentData.forEach((k, v) => playersMap[k.toString()] = v);
-      } else if (currentData is List) {
-        for (var i = 0; i < currentData.length; i++) {
-          final entry = currentData[i];
-          if (entry is Map) {
-            playersMap['$i'] = entry;
-          }
-        }
-      }
-
-      // compute next slot index
-      final next = playersMap.keys
+    // 3) Append a new slot
+    await lobby.child('players').runTransaction((raw) {
+      final m = <String, dynamic>{}..addAll(_normalizeMap(raw));
+      final next = m.keys
           .map((k) => int.tryParse(k) ?? 0)
-          .fold(0, (mx, n) => n > mx ? n : mx) + 1;
-
-      playersMap['$next'] = {
-        'userId'     : uid,
+          .fold(0, (a, b) => b > a ? b : a) +
+          1;
+      m['$next'] = {
+        'userId': _uid,
         'displayName': displayName,
       };
-
-      return Transaction.success(playersMap);
+      return Transaction.success(m);
     });
-  }
+  });
 
+  Future<void> updateMyName(String sessionId, String newName) =>
+      _run<void>(() async {
+        final playersRef = _lobbyRef(sessionId).child('players');
+        final snap = await playersRef.get();
+        final players = _normalizeMap(snap.value);
 
+        final slot = players.entries
+            .firstWhere(
+              (e) => e.value['userId'] == _uid,
+          orElse: () => throw LobbyException('You are not in this lobby.'),
+        )
+            .key;
 
+        await playersRef.child(slot).child('displayName').set(newName);
+      });
 
-
-  /// Player: change your display name (finds your slot and updates displayName).
-  Future<void> updateMyName(String sessionId, String newName) async {
-    final uid = _auth.currentUser!.uid;
-    final playersRef = _lobbyRef(sessionId).child('players');
-    final snap = await playersRef.get();
-
-    // 1) Normalize the snapshot into a Dart map
-    final raw = snap.value;
-    final Map<String, dynamic> players;
-    if (raw is Map) {
-      players = Map<String, dynamic>.from(raw);
-    } else if (raw is List) {
-      players = {};
-      for (var i = 0; i < raw.length; i++) {
-        final entry = raw[i];
-        if (entry is Map) {
-          players['$i'] = Map<String, dynamic>.from(entry);
-        }
-      }
-    } else {
-      return; // no players yet
-    }
-
-    // 2) Find your slot
-    String? mySlot;
-    players.forEach((slot, info) {
-      if (info['userId'] == uid) mySlot = slot;
-    });
-    if (mySlot == null) return; // you aren’t in the lobby
-
-    // 3) Write the new name
-    await playersRef.child(mySlot!).child('displayName').set(newName);
-  }
-
-  /// Player: submit or update your vote map.
   Future<void> submitVote({
     required String sessionId,
     required Map<String, String> vote,
-  }) async {
-    final uid = _auth.currentUser!.uid;
-    final voteRef = _lobbyRef(sessionId).child('votes').child(uid);
-    await voteRef.set(vote);
-  }
+  }) => _run<void>(() async {
+    await _lobbyRef(sessionId).child('votes').child(_uid).set(vote);
+  });
 
-  /// Stream the entire lobby node for real‑time updates.
-  Stream<DatabaseEvent> lobbyStream(String sessionId) {
-    return _lobbyRef(sessionId).onValue;
-  }
+  Stream<DatabaseEvent> lobbyStream(String sessionId) =>
+      _lobbyRef(sessionId).onValue;
 
-  /// Host: tally all votes, compute resolution, and write to RTDB.
-  Future<void> resolveVotes(String sessionId) async {
+  Future<void> resolveVotes(String sessionId) => _run<void>(() async {
     final ref = _lobbyRef(sessionId);
-    final snap = await ref.get();
-    final data = (snap.value as Map?) ?? {};
+    final data = (await ref.get()).value as Map? ?? {};
 
-    // Host defaults
-    final randomDefaults = Map<String, String>.from(
-        (data['randomDefaults'] ?? {}) as Map
-    );
-
-    // Gather votes
+    final defaults = Map<String, String>.from((data['randomDefaults'] ?? {}) as Map);
     final rawVotes = (data['votes'] as Map?) ?? {};
-    final Map<String, Map<String,int>> counts = {};
+    final counts = <String, Map<String, int>>{};
+
     rawVotes.forEach((uid, v) {
-      final votes = Map<String, dynamic>.from(v as Map);
+      final votes = Map<String, dynamic>.from(v);
       votes.forEach((dim, choice) {
         counts.putIfAbsent(dim, () => {});
         final m = counts[dim]!;
@@ -224,279 +201,180 @@ class LobbyRtdbService {
       });
     });
 
-    // Compute resolution
     final rnd = Random();
-    final Map<String, String> resolved = {};
-    randomDefaults.forEach((dim, hostDef) {
-      final m = counts[dim];
-      if (m == null || m.isEmpty) {
+    final resolved = <String, String>{};
+    defaults.forEach((dim, hostDef) {
+      final m = counts[dim] ?? {};
+      if (m.isEmpty) {
         resolved[dim] = hostDef;
       } else if (m.length == 1) {
         resolved[dim] = m.keys.first;
       } else {
-        final maxCount = m.values.reduce((a,b) => a>b? a:b);
-        final winners = m.entries.where((e)=>e.value==maxCount).map((e)=>e.key).toList();
-        resolved[dim] = winners[rnd.nextInt(winners.length)];
+        final maxCnt = m.values.reduce((a, b) => a > b ? a : b);
+        final tied = m.entries.where((e) => e.value == maxCnt).map((e) => e.key).toList();
+        resolved[dim] = tied[rnd.nextInt(tied.length)];
       }
     });
 
-    // Write results
     await ref.update({
       'resolvedDimensions': resolved,
-      'votesResolved':      true,
-      'phase':              'voteResults',
+      'votesResolved': true,
+      'phase': 'voteResults',
     });
-  }
+  });
 
-  /// Optional: leave the lobby (remove your player entry + votes).
-  Future<void> leaveLobby(String sessionId) async {
-    final uid = _auth.currentUser!.uid;
+  Future<void> leaveLobby(String sessionId) => _run<void>(() async {
     final lobby = _lobbyRef(sessionId);
-    final playersRef = lobby.child('players');
-    final snap = await playersRef.get();
-    if (snap.exists && snap.value is Map) {
-      final players = Map<String,dynamic>.from(snap.value as Map);
-      for (final slot in players.keys) {
-        final info = Map<String,dynamic>.from(players[slot]);
-        if (info['userId'] == uid) {
-          await playersRef.child(slot).remove();
-          break;
-        }
-      }
-    }
-    await lobby.child('votes').child(uid).remove();
-  }
+    final playersSnap = await lobby.child('players').get();
+    final players = _normalizeMap(playersSnap.value);
 
-  /// Player: submit your vote on the next decision.
-  /// Player: submit your vote for the next story decision.
+    final slot = players.entries
+        .firstWhere((e) => e.value['userId'] == _uid, orElse: () => MapEntry('', null))
+        .key;
+    if (slot.isNotEmpty) {
+      await lobby.child('players').child(slot).remove();
+    }
+    await lobby.child('votes').child(_uid).remove();
+  });
+
   Future<void> submitStoryVote({
     required String sessionId,
     required String vote,
-  }) async {
-    final uid     = _auth.currentUser!.uid;
-    final voteRef = _lobbyRef(sessionId).child('storyVotes').child(uid);
-    await voteRef.set(vote);
-  }
+  }) => _run<void>(() async {
+    await _lobbyRef(sessionId).child('storyVotes').child(_uid).set(vote);
+  });
 
-  /// Anyone: change the lobby phase.
-  /// Anyone: set lobby phase.  Single lightweight write.
   Future<void> updatePhase({
     required String sessionId,
     required String phase,
-  }) async {
+    required bool isNewGame,
+  }) => _run<void>(() async {
     await _lobbyRef(sessionId).child('phase').set(phase);
-  }
+    await _lobbyRef(sessionId).child('isNewGame').set(isNewGame);
+  });
 
-  /// Host: after picking the next leg, broadcast it to everyone.
-  /// Host: broadcast the freshly built story leg and flip phase back to 'story'.
   Future<void> advanceToStoryPhase({
     required String sessionId,
     required Map<String, dynamic> storyPayload,
-  }) async {
+  }) => _run<void>(() async {
     await _lobbyRef(sessionId).update({
-      'storyPayload' : storyPayload,
-      'resolvedChoice': null,   // clean slate for next round
-      'phase'        : 'story',
+      'storyPayload': storyPayload,
+      'resolvedChoice': null,
+      'phase': 'story',
     });
-  }
+  });
 
   Future<void> setPhaseToStory({
     required String sessionId,
-  }) async {
-    await _lobbyRef(sessionId).update({
-      'phase'        : 'story',
-    });
-  }
+  }) => _run<void>(() async {
+    await _lobbyRef(sessionId).child('phase').set('story');
+  });
 
   Future<void> setPhaseTolobby({
     required String sessionId,
-  }) async {
-    await _lobbyRef(sessionId).update({
-      'phase'        : 'lobby',
-    });
-  }
+  }) => _run<void>(() async {
+    await _lobbyRef(sessionId).child('phase').set('lobby');
+  });
 
   Future<bool> checkNewGame({
     required String sessionId,
-  }) async {
-    final DataSnapshot snapshot = await _lobbyRef(sessionId).child('isNewGame').get();
-    final bool hasDefaults = snapshot.exists && snapshot.value == true;
-    return hasDefaults;
-  }
+  }) => _run<bool>(() async {
+    final v = (await _lobbyRef(sessionId).child('isNewGame').get()).value;
+    return v == true;
+  });
 
-  /// Increment the in‑lobby counter.
-  Future<void> incrementInLobbyCount(String sessionId) async {
-    final countRef = _lobbyRef(sessionId).child('inLobbyCount');
-    await countRef.runTransaction((currentData) {
-      // currentData is the existing value at this location (or null)
-      final current = (currentData as int?) ?? 0;
-      return Transaction.success(current + 1);
+  Future<void> incrementInLobbyCount(String sessionId) => _run<void>(() async {
+    await _lobbyRef(sessionId).child('inLobbyCount').runTransaction((c) {
+      final curr = (c as int?) ?? 0;
+      return Transaction.success(curr + 1);
     });
-  }
+  });
 
   Future<Map<String, dynamic>?> fetchStoryPayload({
     required String sessionId,
-  }) async {
+  }) => _run<Map<String, dynamic>?>(() async {
     final snap = await _lobbyRef(sessionId).child('storyPayload').get();
     if (!snap.exists || snap.value == null) return null;
     return Map<String, dynamic>.from(snap.value as Map);
-  }
+  });
 
-
-  /// Decrement the in‑lobby counter (never below 0),
-  /// and if it just went to 0, set phase → 'story'.
-  Future<void> decrementInLobbyCount(String sessionId) async {
-    final countRef = _lobbyRef(sessionId).child('inLobbyCount');
-
-    // Run the transaction and capture the result
-    final result = await countRef.runTransaction((currentData) {
-      final current = (currentData as int?) ?? 0;
-      final next = current - 1;
-      return Transaction.success(next >= 0 ? next : 0);
+  Future<void> decrementInLobbyCount(String sessionId) => _run<void>(() async {
+    final ref = _lobbyRef(sessionId).child('inLobbyCount');
+    final res = await ref.runTransaction((c) {
+      final n = ((c as int?) ?? 0) - 1;
+      return Transaction.success(n < 0 ? 0 : n);
     });
-
-    // After committing, check the new count
-    final newCount = (result.snapshot.value as int?) ?? 0;
+    final newCount = (res.snapshot.value as int?) ?? 0;
     if (newCount == 0) {
-      // last one out—flip phase to 'story'
       await _lobbyRef(sessionId).child('phase').set('story');
     }
-  }
+  });
 
-  /// Host: remove a player (and their votes) by slot index.
   Future<void> kickPlayer({
     required String sessionId,
     required int slot,
-  }) async {
-    final lobbyRef = _lobbyRef(sessionId);
-    final playerRef = lobbyRef.child('players').child('$slot');
-
-    // get the userId so we can also delete their votes
-    final snap = await playerRef.get();
+  }) => _run<void>(() async {
+    final lobby = _lobbyRef(sessionId);
+    final snap = await lobby.child('players/$slot').get();
     if (snap.exists && snap.value is Map) {
       final userId = (snap.value as Map)['userId'] as String?;
-      // remove the player entry
-      await playerRef.remove();
+      await lobby.child('players/$slot').remove();
       if (userId != null) {
-        // also remove any votes they had submitted
-        await lobbyRef.child('votes').child(userId).remove();
+        await lobby.child('votes').child(userId).remove();
       }
     }
-  }
+  });
 
-
-  /// Anyone: fetch the current storyPayload, but only if we're in the 'story' phase.
-  /// Returns the payload map when phase == 'story', or null otherwise.
   Future<Map<String, dynamic>?> fetchStoryPayloadIfInStoryPhase({
     required String sessionId,
-  }) async {
+  }) => _run<Map<String, dynamic>?>(() async {
     final ref = _lobbyRef(sessionId);
+    final phase = (await ref.child('phase').get()).value;
+    if (phase != 'story') return null;
+    final snap = await ref.child('storyPayload').get();
+    if (!snap.exists || snap.value == null) return null;
+    return Map<String, dynamic>.from(snap.value as Map);
+  });
 
-    // 1) Check current phase
-    final phaseSnap = await ref.child('phase').get();
-    if (phaseSnap.value != 'story') {
-      return null;
-    }
-
-    // 2) Read the storyPayload
-    final payloadSnap = await ref.child('storyPayload').get();
-    if (!payloadSnap.exists || payloadSnap.value == null) {
-      return null;
-    }
-
-    // 3) Cast and return
-    return Map<String, dynamic>.from(payloadSnap.value as Map);
-  }
-
-  /// Returns a map of slotIndex → playerData.
-  /// If there are no players (or on error), returns an empty map.
   Future<Map<int, Map<String, dynamic>>> fetchPlayerList({
     required String sessionId,
-  }) async {
+  }) => _run<Map<int, Map<String, dynamic>>>(() async {
+    final snap = await _lobbyRef(sessionId).child('players').get();
+    final flat = _normalizeMap(snap.value);
+    final result = <int, Map<String, dynamic>>{};
+    flat.forEach((k, v) {
+      result[int.parse(k)] = Map<String, dynamic>.from(v);
+    });
+    return result;
+  });
+
+  Future<String> resolveStoryVotes(String sessionId) => _run<String>(() async {
     final ref = _lobbyRef(sessionId);
-
-    try {
-      final snapshot = await ref.child('players').get();
-
-      // If nothing there, just return empty
-      if (!snapshot.exists || snapshot.value == null) {
-        return <int, Map<String, dynamic>>{};
-      }
-
-      // Normalize whatever RTDB gave us into a flat String→Map
-      final dynamic raw = snapshot.value;
-      final Map<String, dynamic> flat;
-      if (raw is Map) {
-        flat = Map<String, dynamic>.from(raw);
-      } else if (raw is List) {
-        flat = <String, dynamic>{};
-        for (var i = 0; i < raw.length; i++) {
-          final e = raw[i];
-          if (e is Map) {
-            flat['$i'] = Map<String, dynamic>.from(e);
-          }
-        }
-      } else {
-        // unrecognized shape
-        return <int, Map<String, dynamic>>{};
-      }
-
-      // Parse keys to int and cast values
-      final playersMap = flat.map<int, Map<String, dynamic>>((key, value) {
-        final index = int.parse(key);
-        return MapEntry(index, Map<String, dynamic>.from(value));
-      });
-
-      return playersMap;
-    } catch (err) {
-      // Log it so you can debug later
-      return <int, Map<String, dynamic>>{};
-    }
-  }
-
-
-  /// Host: tally all storyVotes, pick a winning choice, clear votes,
-  /// and set phase to 'storyVoteResults'. Returns the winner.
-  /// Host: tally votes → pick winner → clear votes → push 'storyVoteResults'.
-  /// Uses ONE multi‑path update to minimize writes.
-  Future<String> resolveStoryVotes(String sessionId) async {
-    final ref  = _lobbyRef(sessionId);
-    final snap = await ref.get();
-    final data = (snap.value as Map?)?.cast<String, dynamic>() ?? {};
-
-    // Count votes
-    final votes  = (data['storyVotes'] as Map?)?.cast<String, dynamic>() ?? {};
-    final counts = <String,int>{};
+    final data = (await ref.get()).value as Map? ?? {};
+    final votes = (data['storyVotes'] as Map?)?.cast<String, dynamic>() ?? {};
+    final counts = <String, int>{};
     votes.values.forEach((v) {
-      final choice = v.toString();
-      counts[choice] = (counts[choice] ?? 0) + 1;
+      final ch = v.toString();
+      counts[ch] = (counts[ch] ?? 0) + 1;
     });
 
-    // Find winners
-    final maxCnt  = counts.values.fold(0, (a,b) => b>a ? b : a);
-    var   winners = counts.entries
+    // tie-breaking
+    final maxCnt = counts.values.fold(0, (a, b) => b > a ? b : a);
+    var winners = counts.entries
         .where((e) => e.value == maxCnt)
         .map((e) => e.key)
         .toList();
-
-    // "<<PREVIOUS_LEG>>" cannot break a tie
     if (winners.length > 1 && winners.contains(kPreviousLegToken)) {
       winners.remove(kPreviousLegToken);
     }
     if (winners.isEmpty) winners = [kPreviousLegToken];
+    final win = winners[Random().nextInt(winners.length)];
 
-    final winner = winners[Random().nextInt(winners.length)];
-
-    // One atomic update: set result + phase, and null‑out old votes
     await ref.update({
-      'resolvedChoice': winner,
-      'phase'         : 'storyVoteResults',
-      'storyVotes'    : null,          // clear votes
+      'resolvedChoice': win,
+      'phase': 'storyVoteResults',
+      'storyVotes': null,
     });
-
-    return winner;
-  }
-
-
-
+    return win;
+  });
 }

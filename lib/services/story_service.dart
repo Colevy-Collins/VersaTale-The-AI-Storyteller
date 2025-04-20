@@ -1,14 +1,152 @@
 import 'dart:convert';
-import 'dart:io'; // Needed to catch SocketException.
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
+/// Thrown whenever an API call fails or the user isn't authenticated.
+class ApiException implements Exception {
+  final String message;
+  ApiException(this.message);
+  @override
+  String toString() => message;
+}
+
 class StoryService {
-  // Replace with your actual backend URL.
-  final String backendUrl = "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";
+  final String backendUrl = "http://localhost:8080";
   final AuthService authService = AuthService();
 
-/*─────────────────────────  S O L O  +  S T O R Y  ─────────────────────────*/
+  /// These match exactly what your server might send in { "message": "…" }.
+  static const _missingDimensionOption =
+      'One or more required dimension options are missing.';
+  static const _maxUserStoriesReached =
+      'User has reached the maximum number of saved stories.';
+  static const _cannotRemoveLastStoryLeg =
+      'Cannot remove the last story leg because only one leg remains.';
+
+  /// Maps HTTP status codes and common network exceptions
+  /// (or backend‑returned messages) to user‑friendly text.
+  String _getFriendlyErrorMessage({
+    int? statusCode,
+    dynamic exception,
+    String? serverMessage,
+  }) {
+    // 1) If the server literally returned one of our known messages, show it directly:
+    if (serverMessage != null) {
+      if (serverMessage == _missingDimensionOption ||
+          serverMessage == _maxUserStoriesReached ||
+          serverMessage == _cannotRemoveLastStoryLeg) {
+        return serverMessage;
+      }
+    }
+
+    // 2) Network / client exceptions
+    if (exception != null) {
+      if (exception is SocketException) {
+        return 'Network error: unable to reach server. Please check your internet connection.';
+      }
+      if (exception is http.ClientException) {
+        return 'Network error: unable to reach server. (${exception.message})';
+      }
+      return 'Unexpected error: ${exception.toString()}';
+    }
+
+    // 3) HTTP status code mappings
+    if (statusCode != null) {
+      switch (statusCode) {
+        case 400:
+          return 'Bad request. Please verify your inputs.';
+        case 401:
+          return 'Authentication failed. Please sign in again.';
+        case 403:
+          return 'You do not have permission to perform this action.';
+        case 404:
+          return 'Requested resource not found.';
+        case 500:
+          return 'Server error. Please try again later.';
+      }
+    }
+
+    // 4) Finally, if we have any other serverMessage, show that
+    if (serverMessage != null && serverMessage.isNotEmpty) {
+      return serverMessage;
+    }
+
+    // Ultimate fallback
+    return 'An unknown error occurred.';
+  }
+
+  /// Internal helper that handles GET/POST, JSON encoding/decoding,
+  /// auth header, query params, and error‐handling.
+  Future<dynamic> _request({
+    required String method,
+    required String path,
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParams,
+  }) async {
+    final token = await authService.getToken();
+    if (token == null) {
+      throw ApiException('User is not authenticated.');
+    }
+
+    final uri =
+    Uri.parse('$backendUrl/$path').replace(queryParameters: queryParams);
+    http.Response res;
+
+    try {
+      if (method == 'POST') {
+        res = await http.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: body != null ? jsonEncode(body) : null,
+        );
+      } else {
+        res = await http.get(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+      }
+    } on SocketException catch (e) {
+      throw ApiException(_getFriendlyErrorMessage(exception: e));
+    } catch (e) {
+      if (e is http.ClientException) {
+        throw ApiException(_getFriendlyErrorMessage(exception: e));
+      }
+      throw ApiException(_getFriendlyErrorMessage(exception: e));
+    }
+
+    // 200 OK → parse JSON
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    }
+
+    // Extract server-sent message, if any
+    String serverMsg = '';
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map && decoded['message'] != null) {
+        serverMsg = decoded['message'];
+      } else {
+        serverMsg = res.body;
+      }
+    } catch (_) {
+      serverMsg = res.body;
+    }
+
+    // Build the friendly message in order of priority
+    final friendly = _getFriendlyErrorMessage(
+      statusCode: res.statusCode,
+      serverMessage: serverMsg,
+    );
+    throw ApiException(friendly);
+  }
+
+  // ───────────────────────── SOLO + STORY ──────────────────────────
 
   Future<Map<String, dynamic>> startStory({
     required String decision,
@@ -17,591 +155,161 @@ class StoryService {
     required int optionCount,
     required String storyLength,
   }) async {
-    final token = await authService.getToken();
-    if (token == null) throw "User is not authenticated.";
-
-    final res = await http.post(
-      Uri.parse("$backendUrl/start_story"),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type':  'application/json',
+    final d = await _request(
+      method: 'POST',
+      path: 'start_story',
+      body: {
+        'decision': decision,
+        'dimensions': dimensionData,
+        'maxLegs': maxLegs,
+        'optionCount': optionCount,
+        'storyLength': storyLength,
       },
-      body: jsonEncode({
-        "decision"    : decision,
-        "dimensions"  : dimensionData,
-        "maxLegs"     : maxLegs,
-        "optionCount" : optionCount,
-        "storyLength" : storyLength,
-      }),
     );
-
-    if (res.statusCode == 200) {
-      final d = jsonDecode(res.body);
-      return {
-        "storyLeg"  : d["aiResponse"]["storyLeg"]  ?? "No story leg returned.",
-        "options"   : d["aiResponse"]["options"]   ?? [],
-        "storyTitle": d["aiResponse"]["storyTitle"]?? "Untitled Story",
-      };
-    }
-    throw jsonDecode(res.body)["message"] ?? res.body;
+    final ai = d['aiResponse'] as Map<String, dynamic>? ?? {};
+    return {
+      'storyLeg': ai['storyLeg'] ?? 'No story leg returned.',
+      'options': ai['options'] ?? [],
+      'storyTitle': ai['storyTitle'] ?? 'Untitled Story',
+    };
   }
 
   Future<Map<String, dynamic>> getNextLeg({required String decision}) async {
-    final token = await authService.getToken();
-    if (token == null) throw "User is not authenticated.";
-
-    final res = await http.post(
-      Uri.parse("$backendUrl/next_leg"),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type':  'application/json',
-      },
-      body: jsonEncode({"decision": decision}),
+    final d = await _request(
+      method: 'POST',
+      path: 'next_leg',
+      body: {'decision': decision},
     );
-
-    if (res.statusCode == 200) {
-      final d = jsonDecode(res.body);
-      return {
-        "storyLeg"  : d["aiResponse"]["storyLeg"]  ?? "No story leg returned.",
-        "options"   : d["aiResponse"]["options"]   ?? [],
-        "storyTitle": d["aiResponse"]["storyTitle"]?? "Untitled Story",
-      };
-    }
-    throw jsonDecode(res.body)["message"] ?? res.body;
+    final ai = d['aiResponse'] as Map<String, dynamic>? ?? {};
+    return {
+      'storyLeg': ai['storyLeg'] ?? 'No story leg returned.',
+      'options': ai['options'] ?? [],
+      'storyTitle': ai['storyTitle'] ?? 'Untitled Story',
+    };
   }
 
   Future<Map<String, dynamic>> saveStory({String? sessionId}) async {
-    final token = await authService.getToken();
-    if (token == null) throw 'User is not authenticated.';
-
-    final qs  = sessionId == null ? '' : '?sessionId=$sessionId';
-    final res = await http.post(
-      Uri.parse('$backendUrl/save_story$qs'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type' : 'application/json',
-      },
-    );
-
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    }
-    throw jsonDecode(res.body)['message'] ?? res.body;
+    return await _request(
+      method: 'POST',
+      path: 'save_story',
+      queryParams: sessionId != null ? {'sessionId': sessionId} : null,
+    ) as Map<String, dynamic>;
   }
+
   Future<List<dynamic>> getSavedStories() async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-    final url = Uri.parse("$backendUrl/saved_stories");
-    try {
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data["stories"] as List<dynamic>;
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    final d = await _request(method: 'GET', path: 'saved_stories');
+    return (d as Map<String, dynamic>)['stories'] as List<dynamic>;
   }
 
   Future<Map<String, dynamic>?> getActiveStory() async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-    final url = Uri.parse("$backendUrl/story");
-    try {
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print(data);
-        return {
-          "storyLeg": data["initialLeg"] ?? "No story leg returned.",
-          "options": data["options"] ?? [],
-          "storyTitle": data["storyTitle"] ?? "Untitled Story",
-        };
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    final d = await _request(method: 'GET', path: 'story');
+    return {
+      'storyLeg':
+      (d as Map<String, dynamic>)['initialLeg'] ?? 'No story leg returned.',
+      'options': d['options'] ?? [],
+      'storyTitle': d['storyTitle'] ?? 'Untitled Story',
+    };
   }
 
   Future<Map<String, dynamic>> viewStory({required String storyId}) async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-    final url = Uri.parse("$backendUrl/view_story?storyId=$storyId");
-    try {
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print(data);
-        return data;
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    return await _request(
+      method: 'GET',
+      path: 'view_story',
+      queryParams: {'storyId': storyId},
+    ) as Map<String, dynamic>;
   }
 
   Future<bool> deleteStory({required String storyId}) async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-    final url = Uri.parse("$backendUrl/delete_story");
-    final payload = jsonEncode({
-      "storyId": "$storyId",
-    });
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      );
-      if (response.statusCode == 200) {
-        return true;
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    await _request(
+      method: 'POST',
+      path: 'delete_story',
+      body: {'storyId': storyId},
+    );
+    return true;
   }
 
   Future<Map<String, dynamic>> continueStory({required String storyId}) async {
-    final token = await authService.getToken();
-    print("storyId: $storyId");
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-    final url = Uri.parse("$backendUrl/continue_story");
-    final payload = jsonEncode({
-      "storyId": "$storyId",
-    });
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          "storyLeg": data["initialLeg"] ?? "No story leg returned.",
-          "options": data["options"] ?? [],
-          "storyTitle": data["storyTitle"] ?? "Untitled Story",
-        };
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    final d = await _request(
+      method: 'POST',
+      path: 'continue_story',
+      body: {'storyId': storyId},
+    );
+    final ai = d as Map<String, dynamic>;
+    return {
+      'storyLeg': ai['initialLeg'] ?? 'No story leg returned.',
+      'options': ai['options'] ?? [],
+      'storyTitle': ai['storyTitle'] ?? 'Untitled Story',
+    };
   }
 
   Future<Map<String, dynamic>> getPreviousLeg() async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-    final url = Uri.parse("$backendUrl/previous_leg");
-    try {
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          "storyLeg": data["aiResponse"]["storyLeg"] ?? "No story leg returned.",
-          "options": data["aiResponse"]["options"] ?? [],
-          "storyTitle": data["aiResponse"]["storyTitle"] ?? "Untitled Story",
-        };
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    final d = await _request(method: 'GET', path: 'previous_leg');
+    final ai =
+        (d as Map<String, dynamic>)['aiResponse'] as Map<String, dynamic>? ??
+            {};
+    return {
+      'storyLeg': ai['storyLeg'] ?? 'No story leg returned.',
+      'options': ai['options'] ?? [],
+      'storyTitle': ai['storyTitle'] ?? 'Untitled Story',
+    };
   }
 
   Future<Map<String, dynamic>> getFullStory({String? sessionId}) async {
-    final token = await authService.getToken();
-    if (token == null) throw 'User is not authenticated.';
-
-    final qs  = sessionId == null ? '' : '?sessionId=$sessionId';
-    final res = await http.get(
-      Uri.parse('$backendUrl/story$qs'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type' : 'application/json',
-      },
-    );
-
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
-    }
-    throw jsonDecode(res.body)['message'] ?? res.body;
+    return await _request(
+      method: 'GET',
+      path: 'story',
+      queryParams: sessionId != null ? {'sessionId': sessionId} : null,
+    ) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> getUserProfile() async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-
-    // Suppose your backend has an endpoint like /profile that returns JSON:
-    // {
-    //   "creationDate": "...",
-    //   "lastAccessDate": "...",
-    //   ...
-    // }
-    final url = Uri.parse("$backendUrl/profile");
-
-    try {
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data;
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    return await _request(method: 'GET', path: 'profile') as Map<String, dynamic>;
   }
 
   Future<void> deleteUserData() async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-
-    final url = Uri.parse("$backendUrl/delete_user_data");
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        // success
-        return;
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    await _request(method: 'POST', path: 'delete_user_data');
   }
 
   Future<bool> deleteAllStories() async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-
-    // Adjust this to match your actual backend endpoint for deleting all stories.
-    final url = Uri.parse("$backendUrl/delete_all_stories");
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        return true;
-      } else {
-        final responseBody = response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        final decoded = jsonDecode(responseBody);
-
-        if (decoded["message"] != null) {
-          throw decoded["message"];
-        } else {
-          throw responseBody;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    await _request(method: 'POST', path: 'delete_all_stories');
+    return true;
   }
 
   Future<void> updateLastAccessDate() async {
-    final token = await authService.getToken();
-    if (token == null) {
-      throw "User is not authenticated.";
-    }
-
-    final url = Uri.parse("$backendUrl/update_last_access");
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        // Success
-        return;
-      } else {
-        final errorMessage =
-        response.body.isNotEmpty ? response.body : "Unknown error occurred.";
-        if (jsonDecode(response.body)["message"] != null) {
-          throw jsonDecode(response.body)["message"];
-        } else {
-          throw errorMessage;
-        }
-      }
-    } on SocketException catch (_) {
-      throw "Server is unavailable or unreachable.";
-    } catch (e) {
-      if (e is http.ClientException) {
-        throw "Server is unavailable or unreachable. \n $e";
-      } else if (e.toString().contains("Route not found")) {
-        throw "Server route is not available.";
-      } else {
-        throw "$e";
-      }
-    }
+    await _request(method: 'POST', path: 'update_last_access');
   }
 
-/*───────────────────────  M U L T I P L A Y E R  ──────────────────────────*/
+  // ─────────────────────── MULTIPLAYER ──────────────────────────
 
-  /// 1️⃣ Host reserves a sessionId + joinCode.
-  Future<Map<String, dynamic>> createMultiplayerSession(String isNewGame) async {
-    final token = await authService.getToken();
-    if (token == null) throw "User is not authenticated.";
+  Future<Map<String, dynamic>> createMultiplayerSession(
+      String isNewGame) async =>
+      await _request(
+        method: 'POST',
+        path: 'create_multiplayer_session',
+        body: {'isNewGame': isNewGame},
+      ) as Map<String, dynamic>;
 
-    final res = await http.post(
-      Uri.parse("$backendUrl/create_multiplayer_session"),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type':  'application/json',
-      },
-      body: jsonEncode({'isNewGame' : isNewGame,}),
-    );
-
-    if (res.statusCode == 200) {
-      final d = jsonDecode(res.body);
-      return {
-        "sessionId": d["sessionId"],
-        "joinCode" : d["joinCode"],
-      };
-    }
-    throw jsonDecode(res.body)["message"] ?? res.body;
-  }
-
-  /// 2️⃣ Joiner validates a join‑code, gets the sessionId back.
   Future<Map<String, dynamic>> joinMultiplayerSession({
     required String joinCode,
     required String displayName,
-  }) async {
-    final token = await authService.getToken();
-    if (token == null) throw "User is not authenticated.";
+  }) async =>
+      await _request(
+        method: 'POST',
+        path: 'join_multiplayer_session',
+        body: {'joinCode': joinCode, 'displayName': displayName},
+      ) as Map<String, dynamic>;
 
-    final res = await http.post(
-      Uri.parse("$backendUrl/join_multiplayer_session"),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type':  'application/json',
-      },
-      body: jsonEncode({"joinCode": joinCode, "displayName": displayName}),
-    );
-
-    if (res.statusCode == 200) return jsonDecode(res.body);
-    throw jsonDecode(res.body)["message"] ?? res.body;
-  }
-
-  /// 3️⃣ Host calls this *after* votes resolved to get first story leg.
   Future<Map<String, dynamic>> startStoryForMultiplayer({
     required Map<String, dynamic> resolvedDimensions,
     required int maxLegs,
     required int optionCount,
     required String storyLength,
-  }) async {
-    return startStory(
-      decision      : "Start Story",
-      dimensionData : resolvedDimensions,
-      maxLegs       : maxLegs,
-      optionCount   : optionCount,
-      storyLength   : storyLength,
-    );
-  }
-
-
-
-
+  }) =>
+      startStory(
+        decision: 'Start Story',
+        dimensionData: resolvedDimensions,
+        maxLegs: maxLegs,
+        optionCount: optionCount,
+        storyLength: storyLength,
+      );
 }

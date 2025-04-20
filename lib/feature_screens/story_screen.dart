@@ -228,6 +228,7 @@ class _StoryScreenState extends State<StoryScreen> {
         await _lobbySvc.updatePhase(
           sessionId: newSessionId,
           phase:     StoryPhase.lobby.asString,
+          isNewGame: false
         );
 
         // 6) navigate host lobby
@@ -253,6 +254,7 @@ class _StoryScreenState extends State<StoryScreen> {
         await _lobbySvc.updatePhase(
           sessionId: widget.sessionId!,
           phase:     StoryPhase.lobby.asString,
+          isNewGame: false
         );
 
         if (!mounted) return;
@@ -381,6 +383,18 @@ class _StoryScreenState extends State<StoryScreen> {
                 // 4. ─── voting in progress UI ───
                 if (ctrl.isMultiplayer && ctrl.phase == StoryPhase.vote) ...[
                   const SizedBox(height: 20),
+
+                  // ① Host “Resolve Votes” button first (only when not busy)
+                  if (ctrl.isHost && !ctrl.busy) ...[
+                    ActionButton(
+                      label: 'Resolve Votes',
+                      busy: ctrl.busy,
+                      onPressed: ctrl.resolveVotesManually,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  // ② Then the spinner or the “Waiting for votes...” text underneath
                   ctrl.busy
                       ? const CircularProgressIndicator()
                       : Text(
@@ -388,14 +402,6 @@ class _StoryScreenState extends State<StoryScreen> {
                     style: GoogleFonts.atma(fontSize: 16),
                     textAlign: TextAlign.center,
                   ),
-                  if (ctrl.isHost && !ctrl.busy) ...[
-                    const SizedBox(height: 10),
-                    ActionButton(
-                      label: 'Resolve Votes',
-                      busy : ctrl.busy,
-                      onPressed: ctrl.resolveVotesManually,
-                    ),
-                  ],
                 ],
                 // ─── NEW: host‑only “Bring Everyone Back” button ───
                 if (ctrl.isMultiplayer &&

@@ -1,33 +1,41 @@
 // lib/screens/join_multiplayer_screen.dart
-// -----------------------------------------------------------------------------
-// Join a multiplayer session using Firebase RTDB.
-//  • Validate join code with backend.
-//  • Register player in RTDB so everyone sees the new lobby entry.
-//  • Navigate into CreateNewStoryScreen (joiner/vote UI).
-// -----------------------------------------------------------------------------
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../controllers/join_controller.dart';
+import '../../utils/ui_utils.dart';
 import '../../services/story_service.dart';
 import '../../services/lobby_rtdb_service.dart';
-import '../new_story_screens/create_new_story_screen.dart';
+import '../../feature_screens/new_story_screens/create_new_story_screen.dart';
 import 'multiplayer_host_lobby_screen.dart';
 
-class JoinMultiplayerScreen extends StatefulWidget {
+class JoinMultiplayerScreen extends StatelessWidget {
   const JoinMultiplayerScreen({Key? key}) : super(key: key);
 
   @override
-  State<JoinMultiplayerScreen> createState() => _JoinMultiplayerScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => JoinController(
+        storyService: StoryService(),
+        lobbyService: LobbyRtdbService(),
+      ),
+      child: const _JoinView(),
+    );
+  }
 }
 
-class _JoinMultiplayerScreenState extends State<JoinMultiplayerScreen> {
+class _JoinView extends StatefulWidget {
+  const _JoinView({Key? key}) : super(key: key);
+
+  @override
+  __JoinViewState createState() => __JoinViewState();
+}
+
+class __JoinViewState extends State<_JoinView> {
   final _codeCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
-  final _storySvc = StoryService();
-  final _lobbySvc = LobbyRtdbService();
-
-  bool _joining = false;
 
   @override
   void dispose() {
@@ -36,83 +44,53 @@ class _JoinMultiplayerScreenState extends State<JoinMultiplayerScreen> {
     super.dispose();
   }
 
-  Future<void> _joinSession() async {
-    final joinCode = _codeCtrl.text.trim().toUpperCase();
-    final displayName = _nameCtrl.text.trim().isEmpty
-        ? 'Player'
-        : _nameCtrl.text.trim();
-
-    if (joinCode.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a join code.')),
-      );
+  Future<void> _onJoinPressed() async {
+    final ctrl = context.read<JoinController>();
+    final code = _codeCtrl.text.trim().toUpperCase();
+    if (code.isEmpty) {
+      showSnack(context, 'Please enter a join code.');
       return;
     }
 
-    setState(() => _joining = true);
+    final name = _nameCtrl.text.trim().isEmpty
+        ? 'Player'
+        : _nameCtrl.text.trim();
+
     try {
-      // 1️⃣ Validate join code and fetch sessionId
-      final res = await _storySvc.joinMultiplayerSession(
-        joinCode: joinCode,
-        displayName: displayName,
-      );
+      final entry = await ctrl.join(joinCode: code, displayName: name);
+      final sessionId = entry.key;
+      final playersMap = entry.value;
 
-      final sessionId = res['sessionId'] as String;
-
-      // 2️⃣ RTDB: register this player so lobby updates for everyone
-      await _lobbySvc.joinSession(
+      final isNew = await ctrl.checkNewGame(sessionId);
+      final next = isNew
+          ? CreateNewStoryScreen(
+        isGroup: true,
         sessionId: sessionId,
-        displayName: displayName,
+        joinCode: code,
+        initialPlayersMap: playersMap,
+      )
+          : MultiplayerHostLobbyScreen(
+        sessionId: sessionId,
+        joinCode: code,
+        playersMap: playersMap,
+        fromSoloStory: false,
+        fromGroupStory: false,
       );
 
-      final playersRaw  = Map<String, dynamic>.from(res['players'] ?? {});
-      final playersMap  = playersRaw.map<int, Map<String, dynamic>>(
-            (k, v) => MapEntry(int.parse(k), Map<String, dynamic>.from(v)),
-      );
-
-      // 3️⃣ Navigate into the voting screen
       if (!mounted) return;
-      bool isNewStory = await _lobbySvc.checkNewGame(sessionId: sessionId);
-      if(isNewStory){
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CreateNewStoryScreen(
-              isGroup: true,
-              sessionId: sessionId,
-              joinCode: joinCode,
-              initialPlayersMap: playersMap,
-            ),
-          ),
-        );
-      } else {
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MultiplayerHostLobbyScreen(
-              sessionId:  sessionId,
-              joinCode:   joinCode,
-              playersMap: playersMap,
-              fromSoloStory: false,
-              fromGroupStory: false,
-            ),
-          ),
-        );
-
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to join: $e', style: GoogleFonts.atma())),
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => next),
       );
-    } finally {
-      setState(() => _joining = false);
+    } catch (e) {
+      showError(context, 'Failed to join: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isJoining = context.watch<JoinController>().isJoining;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Join Game', style: GoogleFonts.atma()),
@@ -126,11 +104,11 @@ class _JoinMultiplayerScreenState extends State<JoinMultiplayerScreen> {
               decoration: const InputDecoration(labelText: 'Join Code'),
               textCapitalization: TextCapitalization.characters,
               onChanged: (v) {
-                final upper = v.toUpperCase();
-                if (_codeCtrl.text != upper) {
+                final up = v.toUpperCase();
+                if (v != up) {
                   _codeCtrl.value = _codeCtrl.value.copyWith(
-                    text: upper,
-                    selection: TextSelection.collapsed(offset: upper.length),
+                    text: up,
+                    selection: TextSelection.collapsed(offset: up.length),
                   );
                 }
               },
@@ -142,8 +120,8 @@ class _JoinMultiplayerScreenState extends State<JoinMultiplayerScreen> {
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: _joining ? null : _joinSession,
-              child: _joining
+              onPressed: isJoining ? null : _onJoinPressed,
+              child: isJoining
                   ? const CircularProgressIndicator()
                   : Text('Join Session', style: GoogleFonts.atma()),
             ),
