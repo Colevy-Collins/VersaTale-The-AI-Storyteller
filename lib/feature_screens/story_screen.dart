@@ -11,8 +11,8 @@ import '../constants/story_tokens.dart';      // kPreviousLegToken
 import '../services/auth_service.dart';
 import '../services/story_service.dart';
 import '../services/lobby_rtdb_service.dart';
-import 'main_splash_screen.dart';
-import 'multiplayer_host_lobby_screen.dart';
+import 'login_screens/main_splash_screen.dart';
+import 'mutiplayer_screens/multiplayer_host_lobby_screen.dart';
 import 'dashboard_screen.dart';
 
 enum _MenuOption {

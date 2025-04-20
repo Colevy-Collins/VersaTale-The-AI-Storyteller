@@ -11,10 +11,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-import '../services/lobby_rtdb_service.dart';
-import '../services/story_service.dart';
-import '../services/dimension_exclusions.dart';
-import 'story_screen.dart';
+import '../../services/lobby_rtdb_service.dart';
+import '../../services/story_service.dart';
+import '../../services/dimension_exclusions.dart';
+import '../story_screen.dart';
 
 class VoteResultsScreen extends StatefulWidget {
   final String sessionId;

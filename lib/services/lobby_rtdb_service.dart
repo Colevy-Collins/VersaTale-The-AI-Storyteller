@@ -447,7 +447,7 @@ class LobbyRtdbService {
       });
 
       return playersMap;
-    } catch (err, stack) {
+    } catch (err) {
       // Log it so you can debug later
       return <int, Map<String, dynamic>>{};
     }

@@ -9,9 +9,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../services/story_service.dart';
-import '../services/lobby_rtdb_service.dart';
-import 'create_new_story_screen.dart';
+import '../../services/story_service.dart';
+import '../../services/lobby_rtdb_service.dart';
+import '../new_story_screens/create_new_story_screen.dart';
 import 'multiplayer_host_lobby_screen.dart';
 
 class JoinMultiplayerScreen extends StatefulWidget {

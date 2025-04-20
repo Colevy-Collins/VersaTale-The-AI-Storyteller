@@ -1,11 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'main_splash_screen.dart';
-import 'create_new_story_screen.dart';
-import 'view_stories_screen.dart';
+import 'login_screens/main_splash_screen.dart';
+import 'new_story_screens/create_new_story_screen.dart';
+import 'story_archives_screen.dart';
 import 'story_screen.dart';
-import 'join_multiplayer_screen.dart';
+import 'mutiplayer_screens/join_multiplayer_screen.dart';
 import '../services/story_service.dart';
 import '../services/auth_service.dart';
 import 'profile_screen.dart';
@@ -172,7 +172,7 @@ class HomeScreen extends StatelessWidget {
                             ),
                             _buildButton(
                               context,
-                              "Story Options",
+                              "New Story",
                               onPressed: () => _showStoryOptionsDialog(context),
                               fontSize: buttonFontSize,
                             ),

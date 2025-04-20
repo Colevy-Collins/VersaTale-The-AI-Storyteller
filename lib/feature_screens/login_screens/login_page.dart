@@ -1,17 +1,22 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
+import '../../services/auth_service.dart';
+import '../dashboard_screen.dart';
+import 'forgot_password_page.dart';
+import '../../services/story_service.dart';
 
-class ForgotPasswordPage extends StatefulWidget {
-  const ForgotPasswordPage({Key? key}) : super(key: key);
+class LoginPage extends StatefulWidget {
+  const LoginPage({Key? key}) : super(key: key);
 
   @override
-  _ForgotPasswordPageState createState() => _ForgotPasswordPageState();
+  _LoginPageState createState() => _LoginPageState();
 }
 
-class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
+class _LoginPageState extends State<LoginPage> {
   final AuthService authService = AuthService();
+  final StoryService storyService = StoryService();
   final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   void _showMessage(String message, {bool isError = false, bool isSuccess = false}) {
     Color bgColor;
@@ -32,18 +37,29 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     );
   }
 
-  Future<void> _resetPassword() async {
+  Future<void> _login() async {
     final email = emailController.text.trim();
-    if (email.isEmpty) {
-      _showMessage("Please enter an email.", isError: true);
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage("Please enter both email and password.", isError: true);
       return;
     }
 
-    final result = await authService.resetPassword(email);
-    if (result.message.toLowerCase().contains("error")) {
-      _showMessage(result.message, isError: true);
+    final result = await authService.signIn(email, password);
+    if (result.user != null) {
+      try {
+        await storyService.updateLastAccessDate();
+      } catch (e) {
+        debugPrint("Failed to update last access date: $e");
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
     } else {
-      _showMessage(result.message, isSuccess: true);
+      _showMessage(result.message, isError: true);
     }
   }
 
@@ -54,12 +70,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       body: SafeArea(
         child: Stack(
           children: [
+            // 1) Background image
             Positioned.fill(
               child: Image.asset(
                 "assets/versatale_home_image.png",
                 fit: BoxFit.cover,
               ),
             ),
+            // 2) Back button
             Positioned(
               top: 10,
               left: 10,
@@ -78,6 +96,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 ),
               ),
             ),
+            // 3) Login form
             LayoutBuilder(
               builder: (context, constraints) {
                 double screenWidth = constraints.maxWidth;
@@ -91,22 +110,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            "Reset Password",
-                            style: TextStyle(
-                              fontSize: fontSize + 4,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black,
-                                  offset: Offset(1, 1),
-                                  blurRadius: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 30),
+                          // Email Field
                           TextField(
                             controller: emailController,
                             style: TextStyle(
@@ -135,9 +139,83 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 15),
+
+                          // Password Field
+                          TextField(
+                            controller: passwordController,
+                            obscureText: true,
+                            style: TextStyle(
+                              fontSize: fontSize,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              labelStyle: TextStyle(
+                                fontSize: fontSize * 0.9,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black,
+                                    offset: Offset(1, 1),
+                                    blurRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              filled: true,
+                              fillColor: Colors.black.withOpacity(0.4),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+
+                          // Forgot Password link
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const ForgotPasswordPage(),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.4),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Forgot Password?',
+                                  style: TextStyle(
+                                    fontSize: fontSize * 0.8,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    decoration: TextDecoration.underline,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black,
+                                        offset: Offset(1, 1),
+                                        blurRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 20),
 
-                          // Submit Button
+                          // Login Button
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
@@ -153,9 +231,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                   width: 2,
                                 ),
                               ),
-                              onPressed: _resetPassword,
+                              onPressed: _login,
                               child: Text(
-                                'Submit',
+                                'Log In',
                                 style: TextStyle(
                                   fontSize: fontSize,
                                   fontWeight: FontWeight.bold,

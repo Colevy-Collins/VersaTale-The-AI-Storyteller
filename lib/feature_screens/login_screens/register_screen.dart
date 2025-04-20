@@ -1,23 +1,28 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
-import 'dashboard_screen.dart';
-import 'forgot_password_page.dart';
-import '../services/story_service.dart';
+import 'package:google_fonts/google_fonts.dart';
+import "../../services/story_service.dart";
+// Adjust these imports for your project.
+import '../../services/auth_service.dart';
+import '../dashboard_screen.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({Key? key}) : super(key: key);
 
   @override
-  _LoginPageState createState() => _LoginPageState();
+  _RegisterScreenState createState() => _RegisterScreenState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final AuthService authService = AuthService();
-  final StoryService storyService = StoryService();
+class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final AuthService authService = AuthService();
+  final StoryService storyService = StoryService();
 
+  /// Helper to show color-coded SnackBars:
+  ///  - [isError] => red background
+  ///  - [isSuccess] => green background
+  ///  - otherwise => blue background (info)
   void _showMessage(String message, {bool isError = false, bool isSuccess = false}) {
     Color bgColor;
     if (isError) {
@@ -37,23 +42,24 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Future<void> _login() async {
+  Future<void> register() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
+    // Basic validation
     if (email.isEmpty || password.isEmpty) {
       _showMessage("Please enter both email and password.", isError: true);
       return;
     }
 
-    final result = await authService.signIn(email, password);
+    final result = await authService.signUp(email, password);
     if (result.user != null) {
       try {
         await storyService.updateLastAccessDate();
       } catch (e) {
         debugPrint("Failed to update last access date: $e");
       }
-
+      _showMessage("Registration successful!", isSuccess: true);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -65,19 +71,20 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    // We'll use LayoutBuilder to compute responsive text sizes
     return Scaffold(
-      // No MaterialApp here
       body: SafeArea(
         child: Stack(
           children: [
             // 1) Background image
             Positioned.fill(
               child: Image.asset(
-                "assets/versatale_home_image.png",
+                "assets/versatale_home_image.png", // Update path to your asset
                 fit: BoxFit.cover,
               ),
             ),
-            // 2) Back button
+
+            // 2) Small black box with a back arrow in the top-left corner
             Positioned(
               top: 10,
               left: 10,
@@ -96,11 +103,13 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-            // 3) Login form
+
+            // 3) Registration form in the center
             LayoutBuilder(
               builder: (context, constraints) {
-                double screenWidth = constraints.maxWidth;
-                double fontSize = min(screenWidth * 0.05, 22.0);
+                final double screenWidth = constraints.maxWidth;
+                // Dynamically compute font size, capping at 22
+                final double fontSize = min(screenWidth * 0.05, 22.0);
 
                 return Center(
                   child: SingleChildScrollView(
@@ -110,7 +119,25 @@ class _LoginPageState extends State<LoginPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Email Field
+                          // Title
+                          Text(
+                            "Create an Account",
+                            style: TextStyle(
+                              fontSize: fontSize + 4,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              shadows: const [
+                                Shadow(
+                                  color: Colors.black,
+                                  offset: Offset(1, 1),
+                                  blurRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+
+                          // Email field
                           TextField(
                             controller: emailController,
                             style: TextStyle(
@@ -119,12 +146,12 @@ class _LoginPageState extends State<LoginPage> {
                               fontWeight: FontWeight.bold,
                             ),
                             decoration: InputDecoration(
-                              labelText: 'Email',
+                              labelText: "Email",
                               labelStyle: TextStyle(
                                 fontSize: fontSize * 0.9,
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                shadows: [
+                                shadows: const [
                                   Shadow(
                                     color: Colors.black,
                                     offset: Offset(1, 1),
@@ -135,13 +162,14 @@ class _LoginPageState extends State<LoginPage> {
                               filled: true,
                               fillColor: Colors.black.withOpacity(0.4),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Colors.white),
                               ),
                             ),
                           ),
                           const SizedBox(height: 15),
 
-                          // Password Field
+                          // Password field
                           TextField(
                             controller: passwordController,
                             obscureText: true,
@@ -151,12 +179,12 @@ class _LoginPageState extends State<LoginPage> {
                               fontWeight: FontWeight.bold,
                             ),
                             decoration: InputDecoration(
-                              labelText: 'Password',
+                              labelText: "Password",
                               labelStyle: TextStyle(
                                 fontSize: fontSize * 0.9,
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                shadows: [
+                                shadows: const [
                                   Shadow(
                                     color: Colors.black,
                                     offset: Offset(1, 1),
@@ -167,55 +195,14 @@ class _LoginPageState extends State<LoginPage> {
                               filled: true,
                               fillColor: Colors.black.withOpacity(0.4),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-
-                          // Forgot Password link
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ForgotPasswordPage(),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.4),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'Forgot Password?',
-                                  style: TextStyle(
-                                    fontSize: fontSize * 0.8,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    decoration: TextDecoration.underline,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black,
-                                        offset: Offset(1, 1),
-                                        blurRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Colors.white),
                               ),
                             ),
                           ),
                           const SizedBox(height: 20),
 
-                          // Login Button
+                          // Register button
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
@@ -231,14 +218,14 @@ class _LoginPageState extends State<LoginPage> {
                                   width: 2,
                                 ),
                               ),
-                              onPressed: _login,
+                              onPressed: register,
                               child: Text(
-                                'Log In',
+                                "Register",
                                 style: TextStyle(
                                   fontSize: fontSize,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
-                                  shadows: [
+                                  shadows: const [
                                     Shadow(
                                       color: Colors.black,
                                       offset: Offset(1, 1),

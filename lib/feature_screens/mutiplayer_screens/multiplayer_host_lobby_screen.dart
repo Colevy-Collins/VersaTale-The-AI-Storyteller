@@ -15,10 +15,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-import '../services/lobby_rtdb_service.dart';
+import '../../services/lobby_rtdb_service.dart';
 import 'vote_results_screen.dart';
-import 'story_screen.dart';
-import 'dashboard_screen.dart';
+import '../story_screen.dart';
+import '../dashboard_screen.dart';
 
 class MultiplayerHostLobbyScreen extends StatefulWidget {
   final String sessionId;
