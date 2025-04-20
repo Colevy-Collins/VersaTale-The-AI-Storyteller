@@ -129,6 +129,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         sessionId: sessionId,
         hostName: hostName,
         randomDefaults: _randomDefaults(),
+        newGame:        true,
       );
 
       final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
