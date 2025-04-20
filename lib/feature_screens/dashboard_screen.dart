@@ -58,7 +58,7 @@ class HomeScreen extends StatelessWidget {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('No active story found.', style: GoogleFonts.atma()),
+            content: Text('No active story found.', style: GoogleFonts.kottaOne()),
           ),
         );
       }
@@ -66,7 +66,7 @@ class HomeScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-          Text('Error resuming active story: $e', style: GoogleFonts.atma()),
+          Text('Error resuming active story: $e', style: GoogleFonts.kottaOne()),
         ),
       );
     }
@@ -136,7 +136,7 @@ class HomeScreen extends StatelessWidget {
                         // title
                         Text(
                           'VersaTale',
-                          style: GoogleFonts.atma(
+                          style: GoogleFonts.carterOne(
                             fontSize: titleSize,
                             fontWeight: FontWeight.bold,
                             foreground: Paint()
@@ -215,7 +215,7 @@ class HomeScreen extends StatelessWidget {
                   },
                   child: Text(
                     'Log Out',
-                    style: GoogleFonts.atma(
+                    style: GoogleFonts.kottaOne(
                       fontSize: logoutSize,
                       fontWeight: FontWeight.bold,
                       color: const Color(0xFF453E2C),
@@ -246,7 +246,7 @@ class HomeScreen extends StatelessWidget {
       onPressed: onPressed,
       child: Text(
         label,
-        style: GoogleFonts.atma(
+        style: GoogleFonts.kottaOne(
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
           color: const Color(0xFF453E2C),
@@ -279,12 +279,12 @@ class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text('Story Options',
-          style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+          style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            title: Text('Solo Story', style: GoogleFonts.atma()),
+            title: Text('Solo Story', style: GoogleFonts.kottaOne()),
             leading: Radio<bool>(
               value: false,
               groupValue: _isGroup,
@@ -292,7 +292,7 @@ class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
             ),
           ),
           ListTile(
-            title: Text('Group Story', style: GoogleFonts.atma()),
+            title: Text('Group Story', style: GoogleFonts.kottaOne()),
             leading: Radio<bool>(
               value: true,
               groupValue: _isGroup,
@@ -304,15 +304,15 @@ class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancel', style: GoogleFonts.atma()),
+          child: Text('Cancel', style: GoogleFonts.kottaOne()),
         ),
         ElevatedButton(
           onPressed: () => widget.onStartStory(_isGroup),
-          child: Text('Start Story', style: GoogleFonts.atma()),
+          child: Text('Start Story', style: GoogleFonts.kottaOne()),
         ),
         ElevatedButton(
           onPressed: () => widget.onContinueStory(_isGroup),
-          child: Text('Continue Story', style: GoogleFonts.atma()),
+          child: Text('Continue Story', style: GoogleFonts.kottaOne()),
         ),
       ],
     );

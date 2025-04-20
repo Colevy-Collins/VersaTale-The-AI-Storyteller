@@ -15,10 +15,9 @@ import '../widgets/action_button.dart';
 import '../widgets/next_action_sheet.dart';
 import '../widgets/story_text_area.dart';
 import '../widgets/full_story_dialog.dart';
-
 import 'dashboard_screen.dart';
 import '../feature_screens/login_screens/main_splash_screen.dart';
-import '../feature_screens/mutiplayer_screens/multiplayer_host_lobby_screen.dart';
+import 'mutiplayer_screens/multiplayer_host_lobby_screen.dart';
 
 enum _MenuOption {
   backToScreen,
@@ -72,20 +71,19 @@ class _StoryScreenState extends State<StoryScreen> {
       storyTitle    : widget.storyTitle,
       sessionId     : widget.sessionId,
       joinCode      : widget.joinCode,
-      onError:   (m) => _showError(m),
-      onInfo :   (m) => _showSnack(m),
+      onError       : (m) => _showError(m),
+      onInfo        : (m) => _showSnack(m),
       onKicked      : _handleKick,
     );
 
     _txtCtrl = TextEditingController(text: ctrl.text);
 
-    // keep StoryTextArea in sync with the controller’s text
     ctrl.addListener(() {
       if (_txtCtrl.text != ctrl.text) {
         _txtCtrl.text = ctrl.text;
         _scrollCtrl.jumpTo(0);
       }
-      setState(() {}); // rebuild for other updated fields
+      setState(() {});
     });
   }
 
@@ -96,10 +94,21 @@ class _StoryScreenState extends State<StoryScreen> {
     _scrollCtrl.dispose();
     super.dispose();
   }
+  // Show translucent teal snackbar
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          msg,
+          style: GoogleFonts.kottaOne(color: const Color(0xFF212121)),
+        ),
+        backgroundColor: const Color(0xFF7FBFC5).withOpacity(1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
-  // ───────────────────────── helpers for snackbars / dialogs ─────────────────
-  void _showSnack(String msg) => showSnack(context, msg);        // ← new
-  void _showError(String msg) => showError(context, msg);        // ← new
+  void _showError(String msg) => showError(context, msg);
 
   // ─────────────────────────── UI: option sheet ──────────────────────────────
   void _showOptionSheet() {
@@ -119,21 +128,8 @@ class _StoryScreenState extends State<StoryScreen> {
     );
   }
 
-  // ─────────────────────────── UI: kick from session ─────────────────────────
-  void _handleKick() {
-    if (!mounted) return;
-
-    _showSnack('You were removed from the session.');
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => HomeScreen()),
-    );
-  }
-
-
   // ───────────────────────── previous‑leg confirmation ────────────────────────
-  Future<void> _confirmAndGoBack() async {                         // ← new
+  Future<void> _confirmAndGoBack() async {
     final ok = await confirmDialog(
       ctx: context,
       title: 'Warning',
@@ -143,25 +139,30 @@ class _StoryScreenState extends State<StoryScreen> {
     if (ok) await ctrl.backOneLeg();
   }
 
-  // ─────────────────────────── MENU ACTIONS ──────────────────────────────────
+  // ─────────────────────────── UI: kick from session ─────────────────────────
+  Future<void> _handleKick() async {
+    if (!mounted) return;
+    _showSnack('You were removed from the session.');
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomeScreen()),
+    );
+  }
 
-  // full‑story dialog
+  // ─────────────────────────── MENU ACTIONS ──────────────────────────────────
   Future<void> _showFullStory() async {
     try {
       final res = await _storySvc.getFullStory(
         sessionId: (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
       );
-
       if (!mounted) return;
-
       showDialog(
         context: context,
         builder: (_) => FullStoryDialog(
           fullStory      : res['initialLeg'] ?? '',
           dialogOptions  : List<String>.from(res['options'] ?? []),
           canPick        : !ctrl.busy &&
-              (ctrl.phase == StoryPhase.story ||
-                  ctrl.phase == StoryPhase.vote),
+              (ctrl.phase == StoryPhase.story || ctrl.phase == StoryPhase.vote),
           onOptionSelected: (opt) {
             Navigator.pop(context);
             ctrl.chooseNext(opt);
@@ -177,7 +178,6 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  // save story to backend
   Future<void> _saveStory() async {
     try {
       final r = await _storySvc.saveStory(
@@ -189,7 +189,6 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  // create or resume a multiplayer lobby (copied from original implementation)
   Future<void> _createGroupSession() async {
     setState(() => ctrl.loading == true);
     try {
@@ -226,9 +225,9 @@ class _StoryScreenState extends State<StoryScreen> {
 
         // 5) switch lobby to “lobby” phase
         await _lobbySvc.updatePhase(
-          sessionId: newSessionId,
-          phase:     StoryPhase.lobby.asString,
-          isNewGame: false
+            sessionId: newSessionId,
+            phase:     StoryPhase.lobby.asString,
+            isNewGame: false
         );
 
         // 6) navigate host lobby
@@ -252,9 +251,9 @@ class _StoryScreenState extends State<StoryScreen> {
         );
 
         await _lobbySvc.updatePhase(
-          sessionId: widget.sessionId!,
-          phase:     StoryPhase.lobby.asString,
-          isNewGame: false
+            sessionId: widget.sessionId!,
+            phase:     StoryPhase.lobby.asString,
+            isNewGame: false
         );
 
         if (!mounted) return;
@@ -286,37 +285,42 @@ class _StoryScreenState extends State<StoryScreen> {
         ctrl.inLobby == 0;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: Colors.white.withOpacity(0.7),
+        backgroundColor: const Color(0xFF7FBFC5).withOpacity(0.5),
         elevation: 8,
         centerTitle: true,
         title: FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             ctrl.title,
-            style: GoogleFonts.atma(
+            style: GoogleFonts.kottaOne(
               fontWeight: FontWeight.bold,
-              color: Colors.black,
+              color: const Color(0xFF212121),
             ),
           ),
         ),
         actions: [
           PopupMenuButton<_MenuOption>(
-            icon: const Icon(Icons.menu, color: Colors.black),
+            icon: Icon(Icons.menu, color: Colors.brown.shade800),
             onSelected: (choice) async {
               switch (choice) {
                 case _MenuOption.backToScreen:
-                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => HomeScreen()),
+                  );
                   break;
                 case _MenuOption.startGroupStory:
                   await _createGroupSession();
                   break;
                 case _MenuOption.viewFullStory:
-                  _showFullStory();
+                  await _showFullStory();
                   break;
                 case _MenuOption.saveStory:
-                  _saveStory();
+                  await _saveStory();
                   break;
                 case _MenuOption.logout:
                   await _authSvc.signOut();
@@ -333,11 +337,11 @@ class _StoryScreenState extends State<StoryScreen> {
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: _MenuOption.backToScreen,
-                child: Text('Back a Screen'),
+                child: Text('Back to Home'),
               ),
               PopupMenuItem(
                 value: _MenuOption.startGroupStory,
-                child: Text('Start Group Story'),
+                child: Text('Mutiplayer Lobby'),
               ),
               PopupMenuItem(
                 value: _MenuOption.viewFullStory,
@@ -359,65 +363,78 @@ class _StoryScreenState extends State<StoryScreen> {
           ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                // ── story text area ──
-                Expanded(
-                  child: StoryTextArea(
-                    controller: _scrollCtrl,
-                    textController: _txtCtrl,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // ── choose next action ──
-                ActionButton(
-                  label: 'Choose Next Action',
-                  busy: ctrl.busy,
-                  onPressed: canPick ? _showOptionSheet : null,
-                ),
-                // 4. ─── voting in progress UI ───
-                if (ctrl.isMultiplayer && ctrl.phase == StoryPhase.vote) ...[
-                  const SizedBox(height: 20),
-
-                  // ① Host “Resolve Votes” button first (only when not busy)
-                  if (ctrl.isHost && !ctrl.busy) ...[
-                    ActionButton(
-                      label: 'Resolve Votes',
-                      busy: ctrl.busy,
-                      onPressed: ctrl.resolveVotesManually,
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-
-                  // ② Then the spinner or the “Waiting for votes...” text underneath
-                  ctrl.busy
-                      ? const CircularProgressIndicator()
-                      : Text(
-                    'Waiting for votes…',
-                    style: GoogleFonts.atma(fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-                // ─── NEW: host‑only “Bring Everyone Back” button ───
-                if (ctrl.isMultiplayer &&
-                    ctrl.isHost &&
-                    (ctrl.inLobby > 0 || ctrl.phase == StoryPhase.lobby)) ...[
-                  const SizedBox(height: 10),
-                  ActionButton(
-                    label: 'Bring Everyone Back',
-                    busy : ctrl.busy,
-                    onPressed: ctrl.hostBringEveryoneBack,
-                  ),
-                ],
-              ],
+      body: Stack(
+        children: [
+          // Placeholder for parchment texture background
+          Positioned.fill(
+            child: Image.asset(
+              'assets/parchment_updated.png',
+              fit: BoxFit.cover,
             ),
           ),
-        ),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // ── story text area ──
+                      Expanded(
+                        child: StoryTextArea(
+                          controller: _scrollCtrl,
+                          textController: _txtCtrl,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // ── choose next action ──
+                      ActionButton(
+                        label: 'Choose Next Action',
+                        busy: ctrl.busy,
+                        onPressed: canPick ? _showOptionSheet : null,
+                      ),
+                      // 4. ─── voting in progress UI ───
+                      if (ctrl.isMultiplayer && ctrl.phase == StoryPhase.vote) ...[
+                        const SizedBox(height: 20),
+
+                        // ① Host “Resolve Votes” button first (only when not busy)
+                        if (ctrl.isHost && !ctrl.busy) ...[
+                          ActionButton(
+                            label: 'Resolve Votes',
+                            busy: ctrl.busy,
+                            onPressed: ctrl.resolveVotesManually,
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+
+                        // ② Then the spinner or the “Waiting for votes...” text underneath
+                        ctrl.busy
+                            ? const CircularProgressIndicator()
+                            : Text(
+                          'Waiting for votes…',
+                          style: GoogleFonts.kottaOne(fontSize: 16),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      // ─── NEW: host‑only “Bring Everyone Back” button ───
+                      if (ctrl.isMultiplayer &&
+                          ctrl.isHost &&
+                          (ctrl.inLobby > 0 || ctrl.phase == StoryPhase.lobby)) ...[
+                        const SizedBox(height: 10),
+                        ActionButton(
+                          label: 'Bring Everyone Back',
+                          busy : ctrl.busy,
+                          onPressed: ctrl.hostBringEveryoneBack,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

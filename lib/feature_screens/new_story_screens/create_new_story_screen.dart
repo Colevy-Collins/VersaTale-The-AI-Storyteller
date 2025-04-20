@@ -1,15 +1,8 @@
 // lib/screens/create_new_story_screen.dart
 // -----------------------------------------------------------------------------
-// Updated for RTDB‑centric multiplayer flow (April 2025)
-// -----------------------------------------------------------------------------
-//  • Host flow:
-//      – picks (or leaves random) dimension values
-//      – calls backend to get {sessionId, joinCode}
-//      – seeds RTDB lobby via LobbyRtdbService.createSession()
-//  • Joiner flow:
-//      – displays same UI to cast votes
-//      – writes vote map to RTDB with LobbyRtdbService.submitVote()
-//  • Solo flow unchanged.
+// “Serene Sky” palette: pale blue background, light cards (#ECF0F3),
+// soft orange accents. Adds a parchment scroll image behind the title and cards,
+// scaled to be slightly wider than the card content (max 500px + padding).
 // -----------------------------------------------------------------------------
 
 import 'dart:math';
@@ -71,8 +64,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       if (group is Map<String, dynamic>) {
         group.forEach((key, values) {
           if (values is List && !excludedDimensions.contains(key)) {
-            defs[key] = _userChoices[key] ?? (List<String>.from(values)
-              ..shuffle()).first;
+            defs[key] = _userChoices[key] ??
+                (List<String>.from(values)
+                  ..shuffle()).first;
           }
         });
       }
@@ -111,7 +105,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e')),
+      );
     } finally {
       setState(() => _loading = false);
     }
@@ -129,7 +125,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         sessionId: sessionId,
         hostName: hostName,
         randomDefaults: _randomDefaults(),
-        newGame:        true,
+        newGame: true,
       );
 
       final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -150,7 +146,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e')),
+      );
     } finally {
       setState(() => _loading = false);
     }
@@ -163,10 +161,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     setState(() => _loading = true);
     try {
       await _lobbySvc.submitVote(
-        sessionId: widget.sessionId!,
-        vote: _votePayload(),
-      );
-
+          sessionId: widget.sessionId!, vote: _votePayload());
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -183,7 +178,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Vote failed: $e')));
+        SnackBar(content: Text('Vote failed: $e')),
+      );
     } finally {
       setState(() => _loading = false);
     }
@@ -191,6 +187,13 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Serene Sky palette
+    final baseColor = const Color(0xFFE3F2FD);
+    final cardColor = const Color(0xFFECF0F3);
+    final accentColor = const Color(0xFFFFB74D);
+    final textColor = const Color(0xFF333333);
+    final shadowColor = const Color(0xFFE0E0E0);
+
     final joiner = widget.isGroup && widget.sessionId != null;
 
     return LayoutBuilder(
@@ -198,72 +201,132 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         final width = constraints.maxWidth;
         final fs = (width * 0.03).clamp(14.0, 20.0);
 
-        return Scaffold(
-          backgroundColor: const Color(0xFFC27B31),
-          body: SafeArea(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+        // Calculate content width (screen minus horizontal padding)
+        final double paddedWidth = width -
+            32; // screen minus 16px padding each side
+        final double cardMaxWidth = paddedWidth < 500.0 ? paddedWidth : 500.0;
+        final double bgImageWidth = cardMaxWidth +
+            200.0; // slightly wider than cards // 16px padding each side
+
+        final screenTheme = Theme.of(context).copyWith(
+          canvasColor: cardColor,
+          cardTheme: CardTheme(
+            color: cardColor,
+            shadowColor: shadowColor,
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: cardColor,
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 8),
+            border: OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          dropdownMenuTheme: DropdownMenuThemeData(
+            menuStyle: MenuStyle(
+                backgroundColor: MaterialStateProperty.all(cardColor)),
+          ),
+        );
+
+        return Theme(
+          data: screenTheme,
+          child: Scaffold(
+            backgroundColor: baseColor,
+            body: SafeArea(
+              child: _loading
+                  ? Center(
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 6, color: accentColor),
+                ),
+              )
+                  : Stack(
                 children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        color: Colors.white,
-                        onPressed: () => Navigator.pop(context),
+                  // Background parchment image scaled to bgImageWidth
+                  Center(
+                    child: Opacity(
+                      opacity: 0.6,
+                      child: Image.asset(
+                        'assets/best_scroll.jpg',
+                        width: bgImageWidth,
+                        fit: BoxFit.cover,
                       ),
-                    ],
-                  ),
-                  SizedBox(height: fs),
-                  Text(
-                    widget.isGroup
-                        ? (joiner
-                        ? 'Vote on Story Settings'
-                        : 'Configure Group Story')
-                        : 'Create Your New Adventure',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.atma(
-                      fontSize: fs + 8,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
                     ),
                   ),
-                  SizedBox(height: fs),
-
-                  DimensionPicker(
-                    groups: _dimensionGroups,
-                    choices: _userChoices,
-                    expanded: _groupExpanded,
-                    onExpand: (key, open) =>
-                        setState(() => _groupExpanded[key] = open),
-                    onChanged: (dim, val) =>
-                        setState(() => _userChoices[dim] = val),
+                  // Main content
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(children: [
+                          IconButton(icon: const Icon(Icons.arrow_back),
+                              color: textColor,
+                              onPressed: () => Navigator.pop(context)),
+                        ]),
+                        SizedBox(height: fs * 1.5),
+                        Text(
+                          widget.isGroup
+                              ? (joiner
+                              ? 'Vote on Story Settings'
+                              : 'Configure Group Story')
+                              : 'Create Your New Adventure',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.kottaOne(fontSize: fs + 8,
+                              fontWeight: FontWeight.bold,
+                              color: textColor),
+                        ),
+                        SizedBox(height: fs * 1.5),
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 450),
+                            child: DimensionPicker(
+                              groups: _dimensionGroups,
+                              choices: _userChoices,
+                              expanded: _groupExpanded,
+                              onExpand: (k, open) =>
+                                  setState(() => _groupExpanded[k] = open),
+                              onChanged: (dim, val) =>
+                                  setState(() => _userChoices[dim] = val),
+                            ),
+                          ),
+                        ),
+                        if (!joiner) ...[
+                          _labeledCard(
+                              'Number of Options:', _optionCountDropdown(fs),
+                              fs, textColor),
+                          _labeledCard(
+                              'Story Length:', _storyLengthDropdown(fs), fs,
+                              textColor),
+                          SizedBox(height: fs * 2),
+                        ],
+                      ],
+                    ),
                   ),
-
-                  if (!joiner) ...[
-                    _labeledCard(
-                        'Number of Options:', _optionCountDropdown(fs), fs),
-                    _labeledCard('Story Length:', _storyLengthDropdown(fs), fs),
-                    SizedBox(height: fs * 2),
-                  ],
                 ],
               ),
             ),
-          ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: joiner
-                ? _submitGroupVote
-                : (widget.isGroup ? _createGroupSession : _startSoloStory),
-            label: Text(
-              widget.isGroup
-                  ? (joiner ? 'Submit Votes' : 'Proceed to Lobby')
-                  : 'Start Story',
-              style: GoogleFonts.atma(
-                  fontSize: fs, fontWeight: FontWeight.bold),
+            floatingActionButton: FloatingActionButton.extended(
+              onPressed: joiner ? _submitGroupVote : (widget.isGroup
+                  ? _createGroupSession
+                  : _startSoloStory),
+              label: Text(widget.isGroup ? (joiner
+                  ? 'Submit Votes'
+                  : 'Proceed to Lobby') : 'Start Story',
+                  style: GoogleFonts.kottaOne(fontSize: fs,
+                      fontWeight: FontWeight.bold,
+                      color: textColor)),
+              backgroundColor: accentColor,
+              foregroundColor: textColor,
             ),
-            backgroundColor: const Color(0xFFE7E6D9),
           ),
         );
       },
@@ -271,44 +334,36 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   }
 
   Widget _optionCountDropdown(double fs) =>
-      DropdownButton<int>(
+      DropdownButtonFormField<int>(
         value: _optionCount,
         isExpanded: true,
-        style: GoogleFonts.atma(
-            fontSize: fs, fontWeight: FontWeight.bold, color: Colors.black87),
+        onChanged: (v) => setState(() => _optionCount = v!),
         items: [2, 3, 4].map((c) =>
             DropdownMenuItem(value: c, child: Text('$c'))).toList(),
-        onChanged: (v) => setState(() => _optionCount = v!),
       );
 
   Widget _storyLengthDropdown(double fs) =>
-      DropdownButton<String>(
+      DropdownButtonFormField<String>(
         value: _storyLength,
         isExpanded: true,
-        style: GoogleFonts.atma(
-            fontSize: fs, fontWeight: FontWeight.bold, color: Colors.black87),
+        onChanged: (v) => setState(() => _storyLength = v!),
         items: ['Short', 'Medium', 'Long'].map((s) =>
             DropdownMenuItem(value: s, child: Text(s))).toList(),
-        onChanged: (v) => setState(() => _storyLength = v!),
       );
 
-  Widget _labeledCard(String label, Widget child, double fs) =>
+  Widget _labeledCard(String label, Widget child, double fs, Color textColor) =>
       Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 500),
           child: Card(
-            color: const Color(0xFFE7E6D9),
-            elevation: 3,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: GoogleFonts.atma(fontSize: fs,
+                  Text(label, style: GoogleFonts.kottaOne(fontSize: fs,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87)),
+                      color: textColor)),
                   const SizedBox(height: 8),
                   child,
                 ],
@@ -317,4 +372,5 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           ),
         ),
       );
+
 }

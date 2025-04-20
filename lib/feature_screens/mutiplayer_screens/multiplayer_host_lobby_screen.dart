@@ -1,9 +1,3 @@
-// lib/screens/multiplayer_host_lobby_screen.dart
-// -----------------------------------------------------------------------------
-// Host lobby screen (host side) with full feature‑parity to the original
-// but refactored for SRP. All heavy lifting is delegated to LobbyHostController.
-// -----------------------------------------------------------------------------
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -19,7 +13,7 @@ import '../../utils/ui_utils.dart';
 class MultiplayerHostLobbyScreen extends StatelessWidget {
   final String sessionId;
   final String joinCode;
-  final Map<int, Map<String, dynamic>> playersMap; // initial snapshot
+  final Map<int, Map<String, dynamic>> playersMap;
   final bool fromSoloStory;
   final bool fromGroupStory;
 
@@ -55,13 +49,11 @@ class _LobbyHostView extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.watch<LobbyHostController>();
 
-    // ------- side‑effects: navigation & errors ---------
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (vm.lastError != null) {
         showError(context, vm.lastError!);
         vm.clearError();
       }
-
       if (vm.isKicked) {
         Navigator.pushReplacement(
           context,
@@ -97,50 +89,185 @@ class _LobbyHostView extends StatelessWidget {
     });
 
     return Scaffold(
-      appBar: AppBar(title: Text('Host Lobby', style: GoogleFonts.atma())),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Join Code:', style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-            SelectableText(joinCode, style: GoogleFonts.atma(fontSize: 24)),
-            const SizedBox(height: 16),
-            Text('Players in Lobby:', style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                itemCount: vm.players.length,
-                itemBuilder: (_, i) => _PlayerTile(
-                  player: vm.players[i],
-                  isHost: vm.isHost,
-                  isMe: vm.players[i].userId == vm.currentUserId,
-                  onKick: () => _confirmKick(context, vm.players[i].slot, vm),
-                  onRename: vm.players[i].userId == vm.currentUserId
-                      ? () => _renameMe(context, vm)
-                      : null,
+      appBar: AppBar(
+        centerTitle: true,
+        title: Text(
+          'Host Lobby',
+          style: GoogleFonts.carterOne(color: Colors.black),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      extendBodyBehindAppBar: true,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Join Code Card
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: Card(
+                      color: Colors.white.withOpacity(0.8),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 12, horizontal: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Join Code:',
+                              style: GoogleFonts.kottaOne(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black),
+                            ),
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              joinCode,
+                              style: GoogleFonts.kottaOne(
+                                  fontSize: 24, color: Colors.black),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                Text(
+                  'Players in Lobby:',
+                  style: GoogleFonts.kottaOne(
+                      fontWeight: FontWeight.bold, color: Colors.black),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                // Player List
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: vm.players.length,
+                    itemBuilder: (_, i) {
+                      final player = vm.players[i];
+                      return Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 400),
+                          child: Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            child: ListTile(
+                              leading: Text(
+                                '${player.slot}',
+                                style: GoogleFonts.kottaOne(color: Colors.black),
+                              ),
+                              title: Text(
+                                player.displayName,
+                                style: GoogleFonts.kottaOne(color: Colors.black),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (player.userId == vm.currentUserId)
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.black),
+                                      onPressed: () => _renameMe(context, vm),
+                                    ),
+                                  if (vm.isHost &&
+                                      player.userId != vm.currentUserId)
+                                    IconButton(
+                                      icon: const Icon(Icons.remove_circle, color: Colors.black),
+                                      onPressed: () => _confirmKick(context, player.slot, vm),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Scalable Quill Image
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final size = constraints.maxWidth * 0.2;
+                    return Center(
+                      child: SizedBox(
+                        width: size,
+                        height: size,
+                        child: Image.asset(
+                          'assets/quill_ink.jpg',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                // Action Buttons
+                if (vm.isHost && !vm.isResolving && !vm.fromSoloStory && !vm.fromGroupStory)
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 200),
+                      child: ElevatedButton(
+                        onPressed: vm.startGroupStory,
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                          backgroundColor: Colors.white.withOpacity(0.9),
+                        ),
+                        child: Text('Start Group Story', style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black)),
+                      ),
+                    ),
+                  ),
+                if (vm.isHost && vm.fromSoloStory && !vm.isResolving)
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 200),
+                      child: ElevatedButton(
+                        onPressed: vm.startSoloStory,
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                          backgroundColor: Colors.white.withOpacity(0.9),
+                        ),
+                        child: Text('Go To Story', style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black)),
+                      ),
+                    ),
+                  ),
+                if (vm.fromGroupStory && !vm.isResolving)
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 200),
+                      child: ElevatedButton(
+                        onPressed: vm.goToStoryAfterResults,
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                          backgroundColor: Colors.white.withOpacity(0.9),
+                        ),
+                        child: Text('Go To Story', style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black)),
+                      ),
+                    ),
+                  ),
+                if (vm.isResolving) const Center(child: CircularProgressIndicator()),
+              ],
             ),
-            const SizedBox(height: 16),
-            if (vm.isHost && !vm.isResolving && !vm.fromSoloStory && !vm.fromGroupStory)
-              ElevatedButton(
-                onPressed: vm.startGroupStory,
-                child: Text('Start Group Story', style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-              ),
-            if (vm.isHost && vm.fromSoloStory && !vm.isResolving)
-              ElevatedButton(
-                onPressed: vm.startSoloStory,
-                child: Text('Go To Story', style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-              ),
-            if (vm.fromGroupStory && !vm.isResolving)
-              ElevatedButton(
-                onPressed: vm.goToStoryAfterResults,
-                child: Text('Go To Story', style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-              ),
-            if (vm.isResolving)
-              const Center(child: CircularProgressIndicator()),
-          ],
+          ),
         ),
       ),
     );
@@ -164,15 +291,15 @@ class _LobbyHostView extends StatelessWidget {
     final newName = await showDialog<String>(
       context: ctx,
       builder: (_) => AlertDialog(
-        title: Text('Change Your Name', style: GoogleFonts.atma()),
+        title: Text('Change Your Name', style: GoogleFonts.kottaOne(color: Colors.black)),
         content: TextField(
           autofocus: true,
           decoration: const InputDecoration(hintText: 'Enter new display name'),
           onChanged: (v) => tmp = v,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, tmp), child: const Text('OK')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.black))),
+          TextButton(onPressed: () => Navigator.pop(ctx, tmp), child: const Text('OK', style: TextStyle(color: Colors.black))),
         ],
       ),
     );
@@ -201,18 +328,7 @@ class _PlayerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Text('${player.slot}', style: GoogleFonts.atma()),
-      title: Text(player.displayName, style: GoogleFonts.atma()),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isMe)
-            IconButton(icon: const Icon(Icons.edit), onPressed: onRename),
-          if (isHost && !isMe)
-            IconButton(icon: const Icon(Icons.remove_circle), onPressed: onKick),
-        ],
-      ),
-    );
+    // Placeholder for custom tile implementation
+    return Container();
   }
 }

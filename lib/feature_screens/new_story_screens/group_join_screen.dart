@@ -117,7 +117,7 @@ class _HostStoryConfigState extends State<HostStoryConfig> {
                   Text(
                     'Configure Group Story',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.atma(
+                    style: GoogleFonts.kottaOne(
                       fontSize: fs + 8,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -145,7 +145,7 @@ class _HostStoryConfigState extends State<HostStoryConfig> {
         onPressed: _createGroupSession,
         label: Text(
           'Proceed to Lobby',
-          style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+          style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFFE7E6D9),
       ),

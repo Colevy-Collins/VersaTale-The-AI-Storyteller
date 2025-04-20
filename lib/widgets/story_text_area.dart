@@ -15,10 +15,17 @@ class StoryTextArea extends StatelessWidget {
   @override
   Widget build(BuildContext ctx) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xF0EDE8), // updated background color
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Scrollbar(
         controller: controller,
@@ -28,9 +35,14 @@ class StoryTextArea extends StatelessWidget {
             controller: textController,
             maxLines: null,
             readOnly: true,
-            decoration:
-            const InputDecoration.collapsed(hintText: 'Story will appear here…'),
-            style: GoogleFonts.atma(),
+            decoration: const InputDecoration.collapsed(
+              hintText: 'Story will appear here…',
+            ),
+            style: GoogleFonts.kottaOne(
+              fontSize: 18,
+              height: 1.4,
+              color: const Color(0xFF212121),
+            ),
           ),
         ),
       ),

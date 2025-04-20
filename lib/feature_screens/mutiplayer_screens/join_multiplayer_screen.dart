@@ -1,5 +1,3 @@
-// lib/screens/join_multiplayer_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -83,7 +81,7 @@ class __JoinViewState extends State<_JoinView> {
         MaterialPageRoute(builder: (_) => next),
       );
     } catch (e) {
-      showError(context, 'Failed to join: $e');
+      showError(context, 'Failed to join: \$e');
     }
   }
 
@@ -92,38 +90,88 @@ class __JoinViewState extends State<_JoinView> {
     final isJoining = context.watch<JoinController>().isJoining;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFFFDE7), // really pale yellow
       appBar: AppBar(
-        title: Text('Join Game', style: GoogleFonts.atma()),
+        centerTitle: true,
+        title: Text(
+          'Join Game',
+          style: GoogleFonts.carterOne(),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            TextField(
-              controller: _codeCtrl,
-              decoration: const InputDecoration(labelText: 'Join Code'),
-              textCapitalization: TextCapitalization.characters,
-              onChanged: (v) {
-                final up = v.toUpperCase();
-                if (v != up) {
-                  _codeCtrl.value = _codeCtrl.value.copyWith(
-                    text: up,
-                    selection: TextSelection.collapsed(offset: up.length),
-                  );
-                }
-              },
+            const SizedBox(height: 160),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 300),
+                child: TextField(
+                  controller: _codeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Join Code',
+                    labelStyle: TextStyle(color: Colors.black),
+                  ),
+                  textAlign: TextAlign.center,
+                  textCapitalization: TextCapitalization.characters,
+                  onChanged: (v) {
+                    final up = v.toUpperCase();
+                    if (v != up) {
+                      _codeCtrl.value = _codeCtrl.value.copyWith(
+                        text: up,
+                        selection: TextSelection.collapsed(offset: up.length),
+                      );
+                    }
+                  },
+                  style: const TextStyle(color: Colors.black),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Your Name'),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 300),
+                child: TextField(
+                  controller: _nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Your Name',
+                    labelStyle: TextStyle(color: Colors.black),
+                  ),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.black),
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: isJoining ? null : _onJoinPressed,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(200, 48),
+              ),
               child: isJoining
-                  ? const CircularProgressIndicator()
-                  : Text('Join Session', style: GoogleFonts.atma()),
+                  ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+                  : Text(
+                'Join Session',
+                style: GoogleFonts.kottaOne(
+                  textStyle: const TextStyle(color: Colors.black),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Bottom image
+            Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Image.asset(
+                  'assets/quill.png',
+                  fit: BoxFit.contain,
+                  width: 200,
+                ),
+              ),
             ),
           ],
         ),

@@ -56,7 +56,7 @@ class DimensionPicker extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: ExpansionTile(
               key: PageStorageKey(groupKey),
-              title: Text(groupKey, style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+              title: Text(groupKey, style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold)),
               initiallyExpanded: expanded[groupKey] ?? false,
               onExpansionChanged: (open) => onExpand(groupKey, open),
               children: dims.entries.map((dimEntry) {

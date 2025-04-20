@@ -19,11 +19,32 @@ class ActionButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: busy ? null : onPressed,
       style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF7FBFC5).withOpacity(0.8),
+        foregroundColor: const Color(0xFF212121),
         minimumSize: const Size.fromHeight(48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.brown.shade500, width: 1.5),
+        ),
+        textStyle: GoogleFonts.kottaOne(
+          fontWeight: FontWeight.w800,
+          fontSize: 16,
+        ),
       ),
-      child: busy
-          ? const CircularProgressIndicator()
-          : Text(label, style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        child: busy
+            ? const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        )
+            : Text(label),
+      ),
     );
   }
 }
+
+// Note: Add a placeholder image at assets/parchment.png and register it in pubspec.yaml:
+//   assets:
+//     - assets/parchment.png

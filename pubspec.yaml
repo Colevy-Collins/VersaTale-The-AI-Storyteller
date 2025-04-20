@@ -69,6 +69,11 @@ flutter:
     - assets/story_archives.png
     - assets/thought_bubble.png
     - assets/reading.jpg
+    - assets/parchment.png
+    - assets/parchment_updated.png
+    - assets/best_scroll.jpg
+    - assets/quill.png
+    - assets/quill_ink.jpg
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

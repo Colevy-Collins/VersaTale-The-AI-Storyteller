@@ -112,10 +112,9 @@ class _SoloStoryConfigState extends State<SoloStoryConfig> {
                   Text(
                     'Create Your New Adventure',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.atma(
+                    style: GoogleFonts.kottaOne(
                       fontSize: fs + 8,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
                     ),
                   ),
                   SizedBox(height: fs * 1.5),
@@ -161,7 +160,7 @@ class _SoloStoryConfigState extends State<SoloStoryConfig> {
         onPressed: _startSoloStory,
         label: Text(
           'Start Story',
-          style: GoogleFonts.atma(fontWeight: FontWeight.bold),
+          style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFFE7E6D9),
       ),

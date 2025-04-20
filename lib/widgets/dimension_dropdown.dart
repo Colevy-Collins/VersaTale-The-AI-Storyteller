@@ -33,7 +33,7 @@ class DimensionDropdown extends StatelessWidget {
           ),
           child: Text(
             option,
-            style: textStyle ?? GoogleFonts.atma(),
+            style: textStyle ?? GoogleFonts.kottaOne(),
             softWrap: true,
           ),
         ),
@@ -46,7 +46,7 @@ class DimensionDropdown extends StatelessWidget {
         // Label for the dropdown
         Text(
           label,
-          style: (textStyle ?? GoogleFonts.atma()).copyWith(
+          style: (textStyle ?? GoogleFonts.kottaOne()).copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -65,7 +65,7 @@ class DimensionDropdown extends StatelessWidget {
             underline: const SizedBox(), // Remove default underline.
             items: items,
             onChanged: onChanged,
-            style: textStyle ?? GoogleFonts.atma(),
+            style: textStyle ?? GoogleFonts.kottaOne(),
           ),
         ),
       ],

@@ -228,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               label: const Text(
                                 "Update Password",
                                 style:
-                                TextStyle(color: Colors.black38),
+                                TextStyle(color: Colors.black),
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: accent,

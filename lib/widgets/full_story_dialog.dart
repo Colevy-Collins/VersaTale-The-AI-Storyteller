@@ -34,29 +34,63 @@ class _FullStoryDialogState extends State<FullStoryDialog> {
   }
 
   @override
-  Widget build(BuildContext dialogCtx) => AlertDialog(
-    title: Text('Full Story So Far', style: GoogleFonts.atma()),
-    content: Container(
-      height: 300,
-      width: double.maxFinite,
-      child: Scrollbar(
-        controller: _ctrl,
-        child: SingleChildScrollView(
-          controller: _ctrl,
-          child: Text(widget.fullStory, style: GoogleFonts.atma()),
-        ),
+  Widget build(BuildContext dialogCtx) => Dialog(
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: Colors.brown.shade300, width: 2),
+    ),
+    backgroundColor: Colors.brown.shade50.withOpacity(0.9),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Current Story',
+            style: GoogleFonts.kottaOne(
+              fontSize: 24,
+              color: Colors.brown.shade800,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: 300,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.brown.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Scrollbar(
+              controller: _ctrl,
+              child: SingleChildScrollView(
+                controller: _ctrl,
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  widget.fullStory,
+                  style: GoogleFonts.kottaOne(color: Colors.brown.shade800),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (widget.dialogOptions.isNotEmpty)
+            ActionButton(
+              label: 'Choose Next Action',
+              onPressed: widget.canPick ? widget.onShowOptions : null,
+            ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text(
+              'Close',
+              style: GoogleFonts.kottaOne(
+                color: Colors.brown.shade800,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     ),
-    actions: [
-      if (widget.dialogOptions.isNotEmpty)
-        ActionButton(
-          label: 'Choose Next Action',
-          onPressed: widget.canPick ? widget.onShowOptions : null,
-        ),
-      TextButton(
-        onPressed: () => Navigator.pop(dialogCtx),
-        child: Text('Close', style: GoogleFonts.atma()),
-      ),
-    ],
   );
 }
