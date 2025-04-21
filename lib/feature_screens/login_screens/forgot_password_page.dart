@@ -1,126 +1,144 @@
+// lib/screens/forgot_password_page.dart
+
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../widgets/auth_widgets.dart';
 import '../../services/auth_service.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
-  const ForgotPasswordPage({Key? key}) : super(key: key);
+  const ForgotPasswordPage({super.key});
 
   @override
   _ForgotPasswordPageState createState() => _ForgotPasswordPageState();
 }
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
-  final AuthService authService = AuthService();
-  final TextEditingController emailController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _authService    = AuthService();
+  final _formKey        = GlobalKey<FormState>();
+  bool _isLoading = false;
 
-  void _showMessage(String message, {bool isError = false, bool isSuccess = false}) {
-    Color bgColor;
-    if (isError) {
-      bgColor = Colors.red;
-    } else if (isSuccess) {
-      bgColor = Colors.green;
-    } else {
-      bgColor = Colors.blue;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: bgColor,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
   }
 
   Future<void> _resetPassword() async {
-    final email = emailController.text.trim();
-    if (email.isEmpty) {
-      _showMessage("Please enter an email.", isError: true);
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    final result = await authService.resetPassword(email);
-    if (result.message.toLowerCase().contains("error")) {
-      _showMessage(result.message, isError: true);
-    } else {
-      _showMessage(result.message, isSuccess: true);
-    }
+    setState(() => _isLoading = true);
+
+    final email = _emailController.text.trim();
+    final res   = await _authService.resetPassword(email);
+
+    // assume result.message contains success or error text
+    final msg     = res.message;
+    final isError = msg.toLowerCase().contains('error');
+
+    showAuthSnackBar(
+      context,
+      msg,
+      background: isError ? Colors.red : Colors.green,
+    );
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final w        = MediaQuery.of(context).size.width;
+    final fontSize = min(w * 0.05, 22.0);
+
     return Scaffold(
-      // No MaterialApp here
       body: SafeArea(
         child: Stack(
           children: [
+            // Background image
             Positioned.fill(
               child: Image.asset(
-                "assets/versatale_home_image.png",
+                'assets/versatale_home_image.png',
                 fit: BoxFit.cover,
               ),
             ),
-            Positioned(
+
+            // Back button
+            const Positioned(
               top: 10,
               left: 10,
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: IconButton(
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ),
+              child: AuthBackButton(),
             ),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                double screenWidth = constraints.maxWidth;
-                double fontSize = min(screenWidth * 0.05, 22.0);
 
-                return Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 500),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            "Reset Password",
-                            style: TextStyle(
-                              fontSize: fontSize + 4,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black,
-                                  offset: Offset(1, 1),
-                                  blurRadius: 2,
-                                ),
-                              ],
-                            ),
+            // Form
+            Form(
+              key: _formKey,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Reset Password',
+                          style: TextStyle(
+                            fontSize: fontSize + 4,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black,
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 30),
-                          TextField(
-                            controller: emailController,
-                            style: TextStyle(
-                              fontSize: fontSize,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                        ),
+                        const SizedBox(height: 30),
+
+                        // Email field
+                        authTextFormField(
+                          controller: _emailController,
+                          label: 'Email',
+                          fontSize: fontSize,
+                          validator: (v) =>
+                          (v ?? '').isEmpty ? 'Enter email' : null,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Submit button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed:
+                            _isLoading ? null : _resetPassword,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                              Colors.black.withOpacity(0.4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              side: const BorderSide(
+                                  color: Colors.white, width: 2),
                             ),
-                            decoration: InputDecoration(
-                              labelText: 'Email',
-                              labelStyle: TextStyle(
-                                fontSize: fontSize * 0.9,
+                            child: _isLoading
+                                ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
                                 color: Colors.white,
+                              ),
+                            )
+                                : Text(
+                              'Submit',
+                              style: TextStyle(
+                                fontSize: fontSize,
                                 fontWeight: FontWeight.bold,
-                                shadows: [
+                                color: Colors.white,
+                                shadows: const [
                                   Shadow(
                                     color: Colors.black,
                                     offset: Offset(1, 1),
@@ -128,55 +146,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                   ),
                                 ],
                               ),
-                              filled: true,
-                              fillColor: Colors.black.withOpacity(0.4),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
                             ),
                           ),
-                          const SizedBox(height: 20),
-
-                          // Submit Button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black.withOpacity(0.4),
-                                shadowColor: Colors.black,
-                                elevation: 8.0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                side: const BorderSide(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                              ),
-                              onPressed: _resetPassword,
-                              child: Text(
-                                'Submit',
-                                style: TextStyle(
-                                  fontSize: fontSize,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ],
         ),
