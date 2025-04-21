@@ -81,7 +81,7 @@ class __JoinViewState extends State<_JoinView> {
         MaterialPageRoute(builder: (_) => next),
       );
     } catch (e) {
-      showError(context, 'Failed to join: \$e');
+      showError(context, 'Failed to join: $e');
     }
   }
 
