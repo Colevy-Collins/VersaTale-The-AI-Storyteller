@@ -112,9 +112,7 @@ class LobbyHostController extends ChangeNotifier {
     if (!isHost || isResolving) return;
     _setResolving(true);
     try {
-      await FirebaseDatabase.instance
-          .ref('lobbies/$sessionId')
-          .update({'phase':'story'});
+      await _svc.resolveVotes(sessionId);
     } catch (e) {
       _handleError(e);
     } finally {
@@ -127,8 +125,7 @@ class LobbyHostController extends ChangeNotifier {
     if (_navigated || isResolving) return;
     _setResolving(true);
     try {
-      storyPayload = await _svc.fetchStoryPayloadIfInStoryPhase(sessionId: sessionId)
-          ?? await _svc.fetchStoryPayload(sessionId: sessionId);
+      storyPayload = await _svc.fetchStoryPayload(sessionId: sessionId);
       if (storyPayload != null) {
         shouldNavigateToStory = true;
         _navigated = true;

@@ -21,52 +21,57 @@ import '../mutiplayer_screens/multiplayer_host_lobby_screen.dart';
 
 class CreateNewStoryScreen extends StatefulWidget {
   final bool isGroup;
+
+  /// Populated when a **joiner** opened this screen from JoinMultiplayer.
   final String? sessionId;
   final String? joinCode;
   final Map<int, Map<String, dynamic>>? initialPlayersMap;
 
   const CreateNewStoryScreen({
-    Key? key,
+    super.key,
     required this.isGroup,
     this.sessionId,
     this.joinCode,
     this.initialPlayersMap,
-  }) : super(key: key);
+  });
 
   @override
-  _CreateNewStoryScreenState createState() => _CreateNewStoryScreenState();
+  State<CreateNewStoryScreen> createState() => _CreateNewStoryScreenState();
 }
 
 class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
+  /* ────────────────────────── services & state ───────────────────────── */
+
   final _storySvc = StoryService();
   final _lobbySvc = LobbyRtdbService();
 
-  bool _loading = false;
-  int _optionCount = 2;
-  String _storyLength = 'Short';
+  bool   _loading  = false;
+  int    _maxLegs  = 10;
+  int    _optionCnt = 2;
+  String _storyLen = 'Short';
 
   late final Map<String, dynamic> _dimensionGroups;
-  final Map<String, String?> _userChoices = {};
-  final Map<String, bool> _groupExpanded = {};
+  final Map<String, String?> _userChoices   = {}; // null = random
+  final Map<String, bool>    _groupExpanded = {};
 
   @override
   void initState() {
     super.initState();
     _dimensionGroups = groupedDimensionOptions;
-    for (var key in _dimensionGroups.keys) {
-      _groupExpanded[key] = false;
-    }
+    _dimensionGroups.keys.forEach((g) => _groupExpanded[g] = false);
   }
 
+  /* ────────────────────────── helpers ───────────────────────── */
+
+  /// Returns a map of every dimension → chosenValue.
+  /// If user didn’t pick, we supply a random option.
   Map<String, String> _randomDefaults() {
     final defs = <String, String>{};
-    _dimensionGroups.forEach((dim, group) {
-      if (group is Map<String, dynamic>) {
-        group.forEach((key, values) {
-          if (values is List && !excludedDimensions.contains(key)) {
-            defs[key] = _userChoices[key] ??
-                (List<String>.from(values)
-                  ..shuffle()).first;
+    _dimensionGroups.forEach((_, g) {
+      if (g is Map<String, dynamic>) {
+        g.forEach((k, v) {
+          if (v is List && !excludedDimensions.contains(k)) {
+            defs[k] = _userChoices[k] ?? (List<String>.from(v)..shuffle()).first;
           }
         });
       }
@@ -74,106 +79,122 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     return defs;
   }
 
+  /// Vote payload = only the dimensions the user explicitly selected.
   Map<String, String> _votePayload() {
-    final payload = <String, String>{};
+    final vote = <String, String>{};
     _userChoices.forEach((k, v) {
-      if (v != null) payload[k] = v;
+      if (v != null) vote[k] = v;
     });
-    return payload;
+    return vote;
   }
+
+  /* ────────────────────────── SOLO flow ───────────────────────── */
 
   Future<void> _startSoloStory() async {
     setState(() => _loading = true);
     try {
       final res = await _storySvc.startStory(
-        decision: 'Start Story',
+        decision:      'Start Story',
         dimensionData: _randomDefaults(),
-        maxLegs: 10,
-        optionCount: _optionCount,
-        storyLength: _storyLength,
+        maxLegs:       _maxLegs,
+        optionCount:   _optionCnt,
+        storyLength:   _storyLen,
       );
       if (!mounted) return;
+      print('res: $res');
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              StoryScreen(
-                initialLeg: res['storyLeg'],
-                options: List<String>.from(res['options'] ?? []),
-                storyTitle: res['storyTitle'],
-              ),
+          builder: (_) => StoryScreen(
+            initialLeg : res['storyLeg'],
+            options    : List<String>.from(res['options'] ?? []),
+            storyTitle : res['storyTitle'],
+          ),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       setState(() => _loading = false);
     }
   }
+
+  /* ────────────────────────── GROUP – host create ───────────────────────── */
 
   Future<void> _createGroupSession() async {
     setState(() => _loading = true);
     try {
-      final backendRes = await _storySvc.createMultiplayerSession('true');
-      final sessionId = backendRes['sessionId'] as String;
-      final joinCode = backendRes['joinCode'] as String;
+      // 1) Ask backend for a fresh sessionId & joinCode (no story yet)
+      final backendRes = await _storySvc.createMultiplayerSession("true");
+      final sessionId  = backendRes['sessionId'] as String;
+      final joinCode   = backendRes['joinCode']  as String;
 
-      final hostName = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
+      // 2) Seed RTDB lobby with host’s random defaults
+      final hostName   = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
       await _lobbySvc.createSession(
-        sessionId: sessionId,
-        hostName: hostName,
+        sessionId:      sessionId,
+        hostName:       hostName,
         randomDefaults: _randomDefaults(),
-        newGame: true,
+        newGame:       true,
       );
 
+      // 3) Build minimal playersMap (host only)
       final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-      final playersMap = {1: {'displayName': hostName, 'userId': currentUid}};
+      final playersMap = <int, Map<String, dynamic>>{
+        1: {'displayName': hostName, 'userId': currentUid},
+      };
 
+      // 4) Submit Host’s vote
+      await _lobbySvc.submitVote(
+        sessionId: sessionId,
+        vote: _votePayload(),
+      );
+
+      // 5) Navigate to lobby
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              MultiplayerHostLobbyScreen(
-                sessionId: sessionId,
-                joinCode: joinCode,
-                playersMap: playersMap,
-                fromSoloStory: false,
-                fromGroupStory: false,
-              ),
+          builder: (_) => MultiplayerHostLobbyScreen(
+            sessionId:     sessionId,
+            joinCode:      joinCode,
+            playersMap:    playersMap,
+            fromSoloStory: false,
+            fromGroupStory: false,
+          ),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       setState(() => _loading = false);
     }
   }
 
+  /* ────────────────────────── GROUP – joiner vote ───────────────────────── */
+
   Future<void> _submitGroupVote() async {
-    if (widget.sessionId == null || widget.joinCode == null ||
-        widget.initialPlayersMap == null) return;
+    if (widget.sessionId == null || widget.joinCode == null || widget.initialPlayersMap == null)
+      return;
 
     setState(() => _loading = true);
     try {
       await _lobbySvc.submitVote(
-          sessionId: widget.sessionId!, vote: _votePayload());
+        sessionId: widget.sessionId!,
+        vote: _votePayload(),
+      );
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              MultiplayerHostLobbyScreen(
-                sessionId: widget.sessionId!,
-                joinCode: widget.joinCode!,
-                playersMap: widget.initialPlayersMap!,
-                fromSoloStory: false,
-                fromGroupStory: false,
-              ),
+          builder: (_) => MultiplayerHostLobbyScreen(
+            sessionId:  widget.sessionId!,
+            joinCode:   widget.joinCode!,
+            playersMap: widget.initialPlayersMap!,
+            fromSoloStory: false,
+            fromGroupStory: false,
+          ),
         ),
       );
     } catch (e) {
@@ -185,6 +206,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     }
   }
 
+  /* ───────────────────────────── UI ───────────────────────────── */
   @override
   Widget build(BuildContext context) {
     // Serene Sky palette
@@ -335,18 +357,18 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
   Widget _optionCountDropdown(double fs) =>
       DropdownButtonFormField<int>(
-        value: _optionCount,
+        value: _optionCnt,
         isExpanded: true,
-        onChanged: (v) => setState(() => _optionCount = v!),
+        onChanged: (v) => setState(() => _optionCnt = v!),
         items: [2, 3, 4].map((c) =>
             DropdownMenuItem(value: c, child: Text('$c'))).toList(),
       );
 
   Widget _storyLengthDropdown(double fs) =>
       DropdownButtonFormField<String>(
-        value: _storyLength,
+        value: _storyLen,
         isExpanded: true,
-        onChanged: (v) => setState(() => _storyLength = v!),
+        onChanged: (v) => setState(() => _storyLen = v!),
         items: ['Short', 'Medium', 'Long'].map((s) =>
             DropdownMenuItem(value: s, child: Text(s))).toList(),
       );
