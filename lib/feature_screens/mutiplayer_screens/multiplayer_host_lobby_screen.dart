@@ -221,21 +221,20 @@ class _LobbyHostView extends StatelessWidget {
                 // Action Buttons
 // new “Start Group Story” = immediate story push
                 if (vm.isHost &&
-                    vm.players.length > 1 &&       // only if you’ve got at least one guest
-                    !vm.isResolving &&
-                    !vm.fromGroupStory)
+                    vm.players.length > 1 &&
+                    !vm.isResolving)
                   Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 200),
                       child: ElevatedButton(
-                        onPressed: vm.startSoloStory,   // ← same as solo: flips phase to 'story'
+                        onPressed: vm.startGroupStory,   // ← same as solo: flips phase to 'story'
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 2,
                           backgroundColor: Colors.white.withOpacity(0.9),
                         ),
                         child: Text(
-                          'Start Group Story',
+                          'Take Everyone to Story',
                           style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black),
                         ),
                       ),
@@ -247,7 +246,7 @@ class _LobbyHostView extends StatelessWidget {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 200),
                       child: ElevatedButton(
-                        onPressed: vm.startSoloStory,
+                        onPressed: vm.goToStoryAfterResults,
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 2,

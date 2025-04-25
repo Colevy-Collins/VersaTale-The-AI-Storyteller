@@ -97,17 +97,19 @@ class LobbyHostController extends ChangeNotifier {
   }
 
   Future<void> startGroupStory() async {
+    // Host-only guard and double-click protection
     if (!isHost || isResolving) return;
+
     _setResolving(true);
     try {
-      await _svc.resolveVotes(sessionId);
+      // Skip vote-results entirely and send everyone straight to the story
+      await _svc.setPhaseToStory(sessionId: sessionId);
     } catch (e) {
       _handleError(e);
     } finally {
       _setResolving(false);
     }
   }
-
   Future<void> startSoloStory() async {
     if (!isHost || isResolving) return;
     _setResolving(true);
