@@ -41,6 +41,7 @@ class LobbyHostController extends ChangeNotifier {
   StreamSubscription<DatabaseEvent>? _sub;
   String? _lastPhase;
   bool    _navigated = false;
+  bool    isNewGame = false;
 
   LobbyHostController({
     required this.sessionId,
@@ -170,6 +171,7 @@ class LobbyHostController extends ChangeNotifier {
     }
 
     players = newPlayers;
+    isNewGame = root['isNewGame'] as bool? ?? false;
 
     // --- phase transitions
     final newPhase = (root['phase'] as String?) ?? 'lobby';

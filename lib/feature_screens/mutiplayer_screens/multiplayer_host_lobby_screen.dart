@@ -219,10 +219,33 @@ class _LobbyHostView extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 // Action Buttons
-// new “Start Group Story” = immediate story push
                 if (vm.isHost &&
                     vm.players.length > 1 &&
-                    !vm.isResolving)
+                    !vm.isResolving &&
+                    vm.isNewGame &&
+                    !vm.fromSoloStory)
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 200),
+                      child: ElevatedButton(
+                        onPressed: vm.startSoloStory,   // ← same as solo: flips phase to 'story'
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                          backgroundColor: Colors.white.withOpacity(0.9),
+                        ),
+                        child: Text(
+                          'Take Everyone to Story',
+                          style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black),
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                if (vm.isHost &&
+                    vm.players.length > 1 &&
+                    !vm.isResolving &&
+                    !vm.isNewGame)
                   Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 200),
