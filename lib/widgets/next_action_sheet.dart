@@ -24,23 +24,32 @@ class NextActionSheet extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: ListView(
         children: [
+          // “Previous Leg” button stays enabled when not busy
           ActionButton(
             label: 'Previous Leg',
             busy: busy,
-            onPressed: () {
+            onPressed: busy
+                ? null
+                : () {
               Navigator.pop(ctx);
               onPrevious();
             },
           ),
           const SizedBox(height: 8),
+
+          // Render each choice, disabling the “The story ends!” option
           ...options.map((choice) {
-            final isFinal = choice == 'The story ends';
+            final isFinal = choice == '1. The story ends';
+
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: ActionButton(
-                label: isFinal ? 'The story ends' : choice,
-                busy: busy || isFinal,
-                onPressed: () {
+                label: choice,
+                busy: busy,
+                // Disable if busy or if it's the final sentinel
+                onPressed: (busy || isFinal)
+                    ? null
+                    : () {
                   Navigator.pop(ctx);
                   onSelect(choice);
                 },

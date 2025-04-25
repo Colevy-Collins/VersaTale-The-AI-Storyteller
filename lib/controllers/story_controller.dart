@@ -103,31 +103,42 @@ class StoryController with ChangeNotifier {
     _lobbySub?.cancel();
   }
 
-  // ───────────────────────── public API called by widget ──────────────────
-
+// ───────────────────────── public API called by widget ──────────────────
   Future<void> chooseNext(String decision) async {
+    // 0) Hard-stop if the user tapped the non-interactive “end” sentinel
+    if (decision.trim() == 'The story ends!') {
+      // Optional: let the UI flash a friendly note
+      _info?.call('The story has ended — no further actions available.');
+      return;            // <-- nothing more to do
+    }
+
+    // 1) Don’t double-submit while busy
     if (_busy) return;
     _setBusy(true);
 
     try {
       if (isMultiplayer) {
         if (_phase == StoryPhase.story) {
+          // first vote of the round
           await _lobbySvc.updatePhase(
-              sessionId: sessionId!,
-              phase: StoryPhase.vote.asString,
-              isNewGame: false
+            sessionId: sessionId!,
+            phase: StoryPhase.vote.asString,
+            isNewGame: false,
           );
           await _submitVote(decision);
         } else if (_phase == StoryPhase.vote) {
+          // voting already in progress
           await _submitVote(decision);
         }
       } else {
+        // solo story flow
         await _advanceSolo(decision);
       }
     } finally {
       _setBusy(false);
     }
   }
+
 
   Future<void> backOneLeg() async {
     if (isMultiplayer) {
