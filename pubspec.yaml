@@ -31,6 +31,13 @@ dependencies:
   flutter:
     sdk: flutter
   google_fonts: ^6.1.0
+    #androidx
+  #open_file: ^lastVersion
+    #support
+  open_file: ^3.5.10
+  path_provider: ^2.1.5
+  url_launcher: ^6.2.5
+
 
 
 
@@ -71,6 +78,7 @@ flutter:
     - assets/best_scroll.jpg
     - assets/quill.png
     - assets/quill_ink.jpg
+    - assets/tutorial.pdf
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
