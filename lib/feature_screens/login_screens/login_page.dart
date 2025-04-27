@@ -1,16 +1,20 @@
-// lib/screens/login_page.dart
+// lib/screens/login_screens/login_page.dart
 
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../../widgets/auth_widgets.dart';
 import '../../services/auth_service.dart';
 import '../../services/story_service.dart';
+import '../../theme/theme_notifier.dart';
 import '../dashboard_screen.dart';
 import 'forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-  @override _LoginPageState createState() => _LoginPageState();
+  const LoginPage({Key? key}) : super(key: key);
+  @override
+  _LoginPageState createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
@@ -39,8 +43,16 @@ class _LoginPageState extends State<LoginPage> {
 
     if (res.user != null) {
       try {
+        // 1️⃣ Load the user’s saved theme from backend
+        final profile = await _storyService.getUserProfile();
+        context.read<ThemeNotifier>().loadFromProfile(profile);
+
+        // 2️⃣ Update last access
         await _storyService.updateLastAccessDate();
-      } catch (_) {}
+      } catch (_) {
+        // silently ignore or log error
+      }
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -62,7 +74,7 @@ class _LoginPageState extends State<LoginPage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Background
+            // Background image
             Positioned.fill(
               child: Image.asset(
                 'assets/versatale_home_image.png',
@@ -74,7 +86,7 @@ class _LoginPageState extends State<LoginPage> {
               top: 10, left: 10,
               child: AuthBackButton(),
             ),
-            // Form
+            // Login form
             Form(
               key: _formKey,
               child: Center(

@@ -12,7 +12,7 @@ class ApiException implements Exception {
 }
 
 class StoryService {
-  final String backendUrl =  "https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";;
+  final String backendUrl =  "http://localhost:8080"; //"https://cloud-run-backend-706116508486.us-central1.run.app"; //"http://localhost:8080";;
   final AuthService authService = AuthService();
 
   /// These match exactly what your server might send in { "message": "…" }.
@@ -266,6 +266,18 @@ class StoryService {
     return await _request(method: 'GET', path: 'profile') as Map<String, dynamic>;
   }
 
+  Future<void> updateUserTheme({
+    required String paletteKey,
+    required String fontFamily,
+  }) async {
+    await _request(
+      method: 'POST',
+      path: 'update_user_theme',
+      body: {'preferredPalette': paletteKey, 'preferredFont': fontFamily},
+    );
+  }
+
+
   Future<void> deleteUserData() async {
     await _request(method: 'POST', path: 'delete_user_data');
   }
@@ -313,3 +325,5 @@ class StoryService {
         storyLength: storyLength,
       );
 }
+
+
