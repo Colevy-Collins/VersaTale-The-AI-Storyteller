@@ -1,3 +1,4 @@
+// lib/screens/multiplayer_host_lobby_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,7 +23,7 @@ class MultiplayerHostLobbyScreen extends StatelessWidget {
     required this.sessionId,
     required this.joinCode,
     required this.playersMap,
-    this.fromSoloStory = false,
+    this.fromSoloStory  = false,
     this.fromGroupStory = false,
   }) : super(key: key);
 
@@ -30,16 +31,18 @@ class MultiplayerHostLobbyScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<LobbyHostController>(
       create: (_) => LobbyHostController(
-        sessionId: sessionId,
+        sessionId    : sessionId,
         currentUserId: FirebaseAuth.instance.currentUser!.uid,
         initialPlayers: playersMap,
-        fromSoloStory: fromSoloStory,
+        fromSoloStory : fromSoloStory,
         fromGroupStory: fromGroupStory,
       ),
       child: _LobbyHostView(joinCode: joinCode),
     );
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
 
 class _LobbyHostView extends StatelessWidget {
   final String joinCode;
@@ -49,24 +52,25 @@ class _LobbyHostView extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.watch<LobbyHostController>();
 
+    /* ── navigation side-effects after state change ── */
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (vm.lastError != null) {
         showError(context, vm.lastError!);
         vm.clearError();
       }
+
       if (vm.isKicked) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomeScreen()),
-        );
-      } else if (vm.shouldNavigateToResults && vm.resolvedResults != null) {
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (_) => HomeScreen()));
+      } else if (vm.shouldNavigateToResults &&
+          vm.resolvedResults != null) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) => VoteResultsScreen(
               resolvedResults: vm.resolvedResults!,
-              sessionId: vm.sessionId,
-              joinCode: joinCode,
+              sessionId      : vm.sessionId,
+              joinCode       : joinCode,
             ),
           ),
         );
@@ -76,11 +80,15 @@ class _LobbyHostView extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => StoryScreen(
-              sessionId: vm.sessionId,
+              sessionId : vm.sessionId,
+              joinCode  : joinCode,
               initialLeg: vm.storyPayload!['initialLeg'],
-              options: List<String>.from(vm.storyPayload!['options'] ?? []),
+              options   : List<String>.from(vm.storyPayload!['options'] ?? []),
               storyTitle: vm.storyPayload!['storyTitle'],
-              joinCode: joinCode,
+              /* ── seed usage counters so badge correct on first frame ── */
+              inputTokens     : vm.storyPayload!['inputTokens']     ?? 0,
+              outputTokens    : vm.storyPayload!['outputTokens']    ?? 0,
+              estimatedCostUsd: vm.storyPayload!['estimatedCostUsd']?? 0.0,
             ),
           ),
         );
@@ -88,13 +96,11 @@ class _LobbyHostView extends StatelessWidget {
       }
     });
 
+    /* ───────────────────── UI scaffold ───────────────────── */
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: Text(
-          'Host Lobby',
-          style: GoogleFonts.carterOne(color: Colors.black),
-        ),
+        title: Text('Host Lobby', style: GoogleFonts.carterOne(color: Colors.black)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -103,8 +109,8 @@ class _LobbyHostView extends StatelessWidget {
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin : Alignment.topLeft,
+            end   : Alignment.bottomRight,
           ),
         ),
         child: SafeArea(
@@ -113,7 +119,7 @@ class _LobbyHostView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Join Code Card
+                /* ── join code card ── */
                 Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 300),
@@ -128,18 +134,14 @@ class _LobbyHostView extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Join Code:',
-                              style: GoogleFonts.kottaOne(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black),
-                            ),
+                            Text('Join Code:',
+                                style: GoogleFonts.kottaOne(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black)),
                             const SizedBox(height: 4),
-                            SelectableText(
-                              joinCode,
-                              style: GoogleFonts.kottaOne(
-                                  fontSize: 24, color: Colors.black),
-                            ),
+                            SelectableText(joinCode,
+                                style: GoogleFonts.kottaOne(
+                                    fontSize: 24, color: Colors.black)),
                           ],
                         ),
                       ),
@@ -147,14 +149,13 @@ class _LobbyHostView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Players in Lobby:',
-                  style: GoogleFonts.kottaOne(
-                      fontWeight: FontWeight.bold, color: Colors.black),
-                  textAlign: TextAlign.center,
-                ),
+
+                /* ── players list ── */
+                Text('Players in Lobby:',
+                    style: GoogleFonts.kottaOne(
+                        fontWeight: FontWeight.bold, color: Colors.black),
+                    textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                // Player List
                 Expanded(
                   child: ListView.builder(
                     itemCount: vm.players.length,
@@ -169,28 +170,22 @@ class _LobbyHostView extends StatelessWidget {
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
                             child: ListTile(
-                              leading: Text(
-                                '${player.slot}',
-                                style: GoogleFonts.kottaOne(color: Colors.black),
-                              ),
-                              title: Text(
-                                player.displayName,
-                                style: GoogleFonts.kottaOne(color: Colors.black),
-                              ),
+                              leading: Text('${player.slot}',
+                                  style: GoogleFonts.kottaOne(color: Colors.black)),
+                              title: Text(player.displayName,
+                                  style: GoogleFonts.kottaOne(color: Colors.black)),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   if (player.userId == vm.currentUserId)
                                     IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.black),
-                                      onPressed: () => _renameMe(context, vm),
-                                    ),
+                                        icon : const Icon(Icons.edit, color: Colors.black),
+                                        onPressed: () => _renameMe(context, vm)),
                                   if (vm.isHost &&
                                       player.userId != vm.currentUserId)
                                     IconButton(
-                                      icon: const Icon(Icons.remove_circle, color: Colors.black),
-                                      onPressed: () => _confirmKick(context, player.slot, vm),
-                                    ),
+                                        icon : const Icon(Icons.remove_circle, color: Colors.black),
+                                        onPressed: () => _confirmKick(context, player.slot, vm)),
                                 ],
                               ),
                             ),
@@ -200,100 +195,41 @@ class _LobbyHostView extends StatelessWidget {
                     },
                   ),
                 ),
+
                 const SizedBox(height: 16),
-                // Scalable Quill Image
+                /* ── quill image ── */
                 LayoutBuilder(
-                  builder: (context, constraints) {
-                    final size = constraints.maxWidth * 0.2;
+                  builder: (context, constr) {
+                    final sz = constr.maxWidth * 0.2;
                     return Center(
                       child: SizedBox(
-                        width: size,
-                        height: size,
-                        child: Image.asset(
-                          'assets/quill_ink.jpg',
-                          fit: BoxFit.contain,
-                        ),
+                        width : sz,
+                        height: sz,
+                        child: Image.asset('assets/quill_ink.jpg', fit: BoxFit.contain),
                       ),
                     );
                   },
                 ),
                 const SizedBox(height: 16),
-                // Action Buttons
+
+                /* ── action buttons ── */
                 if (vm.isHost &&
                     vm.players.length > 1 &&
                     !vm.isResolving &&
                     vm.isNewGame &&
                     !vm.fromSoloStory)
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 200),
-                      child: ElevatedButton(
-                        onPressed: vm.startSoloStory,   // ← same as solo: flips phase to 'story'
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 2,
-                          backgroundColor: Colors.white.withOpacity(0.9),
-                        ),
-                        child: Text(
-                          'Take Everyone to Story',
-                          style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black),
-                        ),
-                      ),
-                    ),
-                  ),
+                  _lobbyButton(vm.startSoloStory, 'Take Everyone to Story'),
                 const SizedBox(height: 16),
                 if (vm.isHost &&
                     vm.players.length > 1 &&
                     !vm.isResolving &&
                     !vm.isNewGame)
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 200),
-                      child: ElevatedButton(
-                        onPressed: vm.startGroupStory,   // ← same as solo: flips phase to 'story'
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 2,
-                          backgroundColor: Colors.white.withOpacity(0.9),
-                        ),
-                        child: Text(
-                          'Take Everyone to Story',
-                          style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black),
-                        ),
-                      ),
-                    ),
-                  ),
+                  _lobbyButton(vm.startGroupStory, 'Take Everyone to Story'),
                 const SizedBox(height: 16),
                 if (vm.isHost && vm.fromSoloStory && !vm.isResolving)
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 200),
-                      child: ElevatedButton(
-                        onPressed: vm.goToStoryAfterResults,
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 2,
-                          backgroundColor: Colors.white.withOpacity(0.9),
-                        ),
-                        child: Text('Go To Story', style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black)),
-                      ),
-                    ),
-                  ),
+                  _lobbyButton(vm.goToStoryAfterResults, 'Go To Story'),
                 if (vm.fromGroupStory && !vm.isResolving)
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 200),
-                      child: ElevatedButton(
-                        onPressed: vm.goToStoryAfterResults,
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 2,
-                          backgroundColor: Colors.white.withOpacity(0.9),
-                        ),
-                        child: Text('Go To Story', style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black)),
-                      ),
-                    ),
-                  ),
+                  _lobbyButton(vm.goToStoryAfterResults, 'Go To Story'),
                 if (vm.isResolving) const Center(child: CircularProgressIndicator()),
               ],
             ),
@@ -303,7 +239,26 @@ class _LobbyHostView extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmKick(BuildContext ctx, int slot, LobbyHostController vm) async {
+  /* ───────── helpers ───────── */
+
+  Widget _lobbyButton(VoidCallback onTap, String label) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 200),
+      child: ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 2,
+          backgroundColor: Colors.white.withOpacity(0.9),
+        ),
+        child: Text(label,
+            style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black)),
+      ),
+    ),
+  );
+
+  Future<void> _confirmKick(
+      BuildContext ctx, int slot, LobbyHostController vm) async {
     final name = vm.players.firstWhere((p) => p.slot == slot).displayName;
     final kick = await confirmDialog(
       ctx: ctx,
@@ -321,15 +276,18 @@ class _LobbyHostView extends StatelessWidget {
     final newName = await showDialog<String>(
       context: ctx,
       builder: (_) => AlertDialog(
-        title: Text('Change Your Name', style: GoogleFonts.kottaOne(color: Colors.black)),
+        title: Text('Change Your Name',
+            style: GoogleFonts.kottaOne(color: Colors.black)),
         content: TextField(
           autofocus: true,
           decoration: const InputDecoration(hintText: 'Enter new display name'),
           onChanged: (v) => tmp = v,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.black))),
-          TextButton(onPressed: () => Navigator.pop(ctx, tmp), child: const Text('OK', style: TextStyle(color: Colors.black))),
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Colors.black))),
+          TextButton(onPressed: () => Navigator.pop(ctx, tmp),
+              child: const Text('OK', style: TextStyle(color: Colors.black))),
         ],
       ),
     );
@@ -337,28 +295,5 @@ class _LobbyHostView extends StatelessWidget {
       vm.changeMyName(newName.trim());
       showSnack(ctx, 'Name updated to ${newName.trim()}');
     }
-  }
-}
-
-class _PlayerTile extends StatelessWidget {
-  final Player player;
-  final bool isHost;
-  final bool isMe;
-  final VoidCallback? onKick;
-  final VoidCallback? onRename;
-
-  const _PlayerTile({
-    Key? key,
-    required this.player,
-    required this.isHost,
-    required this.isMe,
-    this.onKick,
-    this.onRename,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    // Placeholder for custom tile implementation
-    return Container();
   }
 }

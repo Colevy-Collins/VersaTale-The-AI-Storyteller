@@ -1,4 +1,9 @@
 // lib/screens/story_screen.dart
+// -----------------------------------------------------------------------------
+// Main reading / interaction screen – solo & multiplayer.
+// Displays live token + cost badge and seeds counters on first launch.
+// -----------------------------------------------------------------------------
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -32,8 +37,13 @@ class StoryScreen extends StatefulWidget {
   final String initialLeg;
   final List<String> options;
   final String storyTitle;
-  final String? sessionId; // null ⇒ solo
+  final String? sessionId;   // null ⇒ solo
   final String? joinCode;
+
+  // NEW – seed usage counters so badge isn’t zero on first frame
+  final int    inputTokens;
+  final int    outputTokens;
+  final double estimatedCostUsd;
 
   const StoryScreen({
     super.key,
@@ -42,21 +52,26 @@ class StoryScreen extends StatefulWidget {
     required this.storyTitle,
     this.sessionId,
     this.joinCode,
+    this.inputTokens      = 0,
+    this.outputTokens     = 0,
+    this.estimatedCostUsd = 0.0,
   });
 
   @override
   State<StoryScreen> createState() => _StoryScreenState();
 }
 
+/* ────────────────────────────────────────────────────────────────────────── */
+
 class _StoryScreenState extends State<StoryScreen> {
-  // ─── controller (business logic) ────────────────────────────────────────────
+  // business logic controller
   late final StoryController ctrl;
 
-  // ─── UI controllers ────────────────────────────────────────────────────────
+  // UI controllers
   final ScrollController _scrollCtrl = ScrollController();
   late final TextEditingController _txtCtrl;
 
-  // ─── service singletons (needed only for menu helpers) ─────────────────────
+  // singletons used for menu helpers
   final _authSvc   = AuthService();
   final _storySvc  = StoryService();
   final _lobbySvc  = LobbyRtdbService();
@@ -71,8 +86,11 @@ class _StoryScreenState extends State<StoryScreen> {
       storyTitle    : widget.storyTitle,
       sessionId     : widget.sessionId,
       joinCode      : widget.joinCode,
-      onError       : (m) => _showError(m),
-      onInfo        : (m) => _showSnack(m),
+      initialInputTokens     : widget.inputTokens,
+      initialOutputTokens    : widget.outputTokens,
+      initialEstimatedCostUsd: widget.estimatedCostUsd,
+      onError       : _showError,
+      onInfo        : _showSnack,
       onKicked      : _handleKick,
     );
 
@@ -83,7 +101,7 @@ class _StoryScreenState extends State<StoryScreen> {
         _txtCtrl.text = ctrl.text;
         _scrollCtrl.jumpTo(0);
       }
-      setState(() {});
+      setState(() {}); // refresh for badge / options etc.
     });
   }
 
@@ -94,23 +112,22 @@ class _StoryScreenState extends State<StoryScreen> {
     _scrollCtrl.dispose();
     super.dispose();
   }
-  // Show translucent teal snackbar
+
+  /* ───────────────────────── snack / error helpers ───────────────────── */
+
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          msg,
-          style: GoogleFonts.kottaOne(color: const Color(0xFF212121)),
-        ),
-        backgroundColor: const Color(0xFF7FBFC5).withOpacity(1),
+        content: Text(msg, style: GoogleFonts.kottaOne(color: const Color(0xFF212121))),
+        backgroundColor: const Color(0xFF7FBFC5),
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
-
   void _showError(String msg) => showError(context, msg);
 
-  // ─────────────────────────── UI: option sheet ──────────────────────────────
+  /* ───────────────────────── option sheet / previous leg ─────────────── */
+
   void _showOptionSheet() {
     final canPick = !ctrl.busy &&
         (ctrl.phase == StoryPhase.story || ctrl.phase == StoryPhase.vote) &&
@@ -128,28 +145,25 @@ class _StoryScreenState extends State<StoryScreen> {
     );
   }
 
-  // ───────────────────────── previous‑leg confirmation ────────────────────────
   Future<void> _confirmAndGoBack() async {
     final ok = await confirmDialog(
       ctx: context,
       title: 'Warning',
-      message:
-      'If you go back and then choose the same option, the next leg may differ. Continue?',
+      message: 'If you go back and then pick the same option, the next leg may differ. Continue?',
     );
     if (ok) await ctrl.backOneLeg();
   }
 
-  // ─────────────────────────── UI: kick from session ─────────────────────────
+  /* ───────────────────────── kicked from multiplayer ─────────────────── */
+
   Future<void> _handleKick() async {
     if (!mounted) return;
     _showSnack('You were removed from the session.');
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => HomeScreen()),
-    );
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
   }
 
-  // ─────────────────────────── MENU ACTIONS ──────────────────────────────────
+  /* ───────────────────────── menu helpers ────────────────────────────── */
+
   Future<void> _showFullStory() async {
     try {
       final res = await _storySvc.getFullStory(
@@ -189,16 +203,17 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
+  /* ───────────────────── create / switch to group session ────────────── */
+
   Future<void> _createGroupSession() async {
-    setState(() => ctrl.loading == true);
+    setState(() {}); // spin indicator if you add one
     try {
       if (!ctrl.isMultiplayer) {
-        // 1) create session on backend
         final backend = await _storySvc.createMultiplayerSession("false");
         final newSessionId = backend['sessionId'] as String;
         final newJoinCode  = backend['joinCode']  as String;
 
-        // 2) seed RTDB lobby
+        // seed lobby
         final hostName = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
         await _lobbySvc.createSession(
           sessionId: newSessionId,
@@ -207,30 +222,30 @@ class _StoryScreenState extends State<StoryScreen> {
           newGame: false,
         );
 
-        // 3) broadcast current solo story
+        // broadcast current solo story incl. counters
         await _lobbySvc.advanceToStoryPhase(
           sessionId: newSessionId,
           storyPayload: {
-            'initialLeg': widget.initialLeg,
-            'options'   : widget.options,
-            'storyTitle': widget.storyTitle,
+            'initialLeg'      : widget.initialLeg,
+            'options'         : widget.options,
+            'storyTitle'      : widget.storyTitle,
+            'inputTokens'     : ctrl.inputTokens,
+            'outputTokens'    : ctrl.outputTokens,
+            'estimatedCostUsd': ctrl.estimatedCostUsd,
           },
         );
 
-        // 4) minimal players map
         final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
         final playersMap = <int, Map<String, dynamic>>{
           1: {'displayName': hostName, 'userId': uid},
         };
 
-        // 5) switch lobby to “lobby” phase
         await _lobbySvc.updatePhase(
-            sessionId: newSessionId,
-            phase:     StoryPhase.lobby.asString,
-            isNewGame: false
+          sessionId: newSessionId,
+          phase    : StoryPhase.lobby.asString,
+          isNewGame: false,
         );
 
-        // 6) navigate host lobby
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -245,17 +260,13 @@ class _StoryScreenState extends State<StoryScreen> {
           ),
         );
       } else {
-        // already multiplayer ⇒ just hop to lobby
-        final playersMap = await _lobbySvc.fetchPlayerList(
-          sessionId: widget.sessionId!,
-        );
-
+        // already multiplayer – jump back to lobby
+        final playersMap = await _lobbySvc.fetchPlayerList(sessionId: widget.sessionId!);
         await _lobbySvc.updatePhase(
-            sessionId: widget.sessionId!,
-            phase:     StoryPhase.lobby.asString,
-            isNewGame: false
+          sessionId: widget.sessionId!,
+          phase    : StoryPhase.lobby.asString,
+          isNewGame: false,
         );
-
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -277,7 +288,8 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  // ─────────────────────────── WIDGET TREE ────────────────────────────────────
+  /* ───────────────────────── build UI ────────────────────────────────── */
+
   @override
   Widget build(BuildContext context) {
     final canPick = !ctrl.busy &&
@@ -294,12 +306,23 @@ class _StoryScreenState extends State<StoryScreen> {
         centerTitle: true,
         title: FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(
-            ctrl.title,
-            style: GoogleFonts.kottaOne(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF212121),
-            ),
+          child: Column(
+            children: [
+              Text(
+                ctrl.title,
+                style: GoogleFonts.kottaOne(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF212121),
+                ),
+              ),
+              Text(
+                '${ctrl.inputTokens} tok • \$${ctrl.estimatedCostUsd.toStringAsFixed(4)}',
+                style: GoogleFonts.kottaOne(
+                  fontSize: 12,
+                  color: Colors.brown.shade800,
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -308,10 +331,7 @@ class _StoryScreenState extends State<StoryScreen> {
             onSelected: (choice) async {
               switch (choice) {
                 case _MenuOption.backToScreen:
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => HomeScreen()),
-                  );
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
                   break;
                 case _MenuOption.startGroupStory:
                   await _createGroupSession();
@@ -325,53 +345,27 @@ class _StoryScreenState extends State<StoryScreen> {
                 case _MenuOption.logout:
                   await _authSvc.signOut();
                   if (!mounted) return;
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => MainSplashScreen()),
-                  );
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainSplashScreen()));
                   break;
                 case _MenuOption.closeMenu:
                   break;
               }
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: _MenuOption.backToScreen,
-                child: Text('Back to Home'),
-              ),
-              PopupMenuItem(
-                value: _MenuOption.startGroupStory,
-                child: Text('Mutiplayer Lobby'),
-              ),
-              PopupMenuItem(
-                value: _MenuOption.viewFullStory,
-                child: Text('View Full Story'),
-              ),
-              PopupMenuItem(
-                value: _MenuOption.saveStory,
-                child: Text('Save Story'),
-              ),
-              PopupMenuItem(
-                value: _MenuOption.logout,
-                child: Text('Logout'),
-              ),
-              PopupMenuItem(
-                value: _MenuOption.closeMenu,
-                child: Text('Close Menu'),
-              ),
+              PopupMenuItem(value: _MenuOption.backToScreen,   child: Text('Back to Home')),
+              PopupMenuItem(value: _MenuOption.startGroupStory,child: Text('Multiplayer Lobby')),
+              PopupMenuItem(value: _MenuOption.viewFullStory,  child: Text('View Full Story')),
+              PopupMenuItem(value: _MenuOption.saveStory,      child: Text('Save Story')),
+              PopupMenuItem(value: _MenuOption.logout,         child: Text('Logout')),
+              PopupMenuItem(value: _MenuOption.closeMenu,      child: Text('Close Menu')),
             ],
           ),
         ],
       ),
+
       body: Stack(
         children: [
-          // Placeholder for parchment texture background
-          Positioned.fill(
-            child: Image.asset(
-              'assets/parchment_updated.png',
-              fit: BoxFit.cover,
-            ),
-          ),
+          Positioned.fill(child: Image.asset('assets/parchment_updated.png', fit: BoxFit.cover)),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -380,7 +374,6 @@ class _StoryScreenState extends State<StoryScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      // ── story text area ──
                       Expanded(
                         child: StoryTextArea(
                           controller: _scrollCtrl,
@@ -388,17 +381,13 @@ class _StoryScreenState extends State<StoryScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      // ── choose next action ──
                       ActionButton(
                         label: 'Choose Next Action',
                         busy: ctrl.busy,
                         onPressed: canPick ? _showOptionSheet : null,
                       ),
-                      // 4. ─── voting in progress UI ───
                       if (ctrl.isMultiplayer && ctrl.phase == StoryPhase.vote) ...[
                         const SizedBox(height: 20),
-
-                        // ① Host “Resolve Votes” button first (only when not busy)
                         if (ctrl.isHost && !ctrl.busy) ...[
                           ActionButton(
                             label: 'Resolve Votes',
@@ -407,24 +396,19 @@ class _StoryScreenState extends State<StoryScreen> {
                           ),
                           const SizedBox(height: 10),
                         ],
-
-                        // ② Then the spinner or the “Waiting for votes...” text underneath
                         ctrl.busy
                             ? const CircularProgressIndicator()
-                            : Text(
-                          'Waiting for votes…',
-                          style: GoogleFonts.kottaOne(fontSize: 16),
-                          textAlign: TextAlign.center,
-                        ),
+                            : Text('Waiting for votes…',
+                            style: GoogleFonts.kottaOne(fontSize: 16),
+                            textAlign: TextAlign.center),
                       ],
-                      // ─── NEW: host‑only “Bring Everyone Back” button ───
                       if (ctrl.isMultiplayer &&
                           ctrl.isHost &&
                           (ctrl.inLobby > 0 || ctrl.phase == StoryPhase.lobby)) ...[
                         const SizedBox(height: 10),
                         ActionButton(
                           label: 'Bring Everyone Back',
-                          busy : ctrl.busy,
+                          busy: ctrl.busy,
                           onPressed: ctrl.hostBringEveryoneBack,
                         ),
                       ],

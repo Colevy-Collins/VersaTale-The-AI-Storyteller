@@ -12,68 +12,83 @@ import '../services/story_service.dart';
 import '../utils/lobby_utils.dart';
 
 class StoryController with ChangeNotifier {
-  // ─────────────────────────── constructor ────────────────────────────────
+  // ───────────────────────── constructor ────────────────────────────────
   StoryController({
-    // immutable inputs from the widget
+    // immutable inputs from widget
     required this.initialLeg,
     required this.initialOptions,
     required this.storyTitle,
     this.sessionId,
     this.joinCode,
     this.onKicked,
-    // DI (handy for tests)
-    AuthService? authService,
-    StoryService? storyService,
+    // dependency injection
+    AuthService?      authService,
+    StoryService?     storyService,
     LobbyRtdbService? lobbyService,
-    // callbacks for UI messages
+    // host-widget callbacks
     void Function(String msg)? onError,
     void Function(String msg)? onInfo,
+    // NEW: seed counters so badge correct on first frame
+    this.initialInputTokens      = 0,
+    this.initialOutputTokens     = 0,
+    this.initialEstimatedCostUsd = 0.0,
   })  : _authSvc  = authService  ?? AuthService(),
         _storySvc = storyService ?? StoryService(),
         _lobbySvc = lobbyService ?? LobbyRtdbService(),
         _onError  = onError,
         _onInfo   = onInfo,
         _currentUid = FirebaseAuth.instance.currentUser?.uid ?? '' {
-    // seed local state
+    // seed narrative
     _text    = initialLeg;
     _options = List.of(initialOptions);
     _title   = storyTitle;
     _phase   = StoryPhase.story;
 
+    // seed usage counters
+    _inputTokens      = initialInputTokens;
+    _outputTokens     = initialOutputTokens;
+    _estimatedCostUsd = initialEstimatedCostUsd;
 
-    // start RTDB listener for multiplayer
+    // multiplayer listener
     if (isMultiplayer) {
-      _lobbySub = _lobbySvc
-          .lobbyStream(sessionId!)
-          .listen(_onLobbyUpdate);
+      _lobbySub =
+          _lobbySvc.lobbyStream(sessionId!).listen(_onLobbyUpdate);
     }
   }
 
-  // ───────────────────────── immutable, public fields ─────────────────────
-  final String  initialLeg;
+  // immutable constructor fields
+  final String initialLeg;
   final List<String> initialOptions;
-  final String  storyTitle;
+  final String storyTitle;
   final String? sessionId;
   final String? joinCode;
   final VoidCallback? onKicked;
+  final int    initialInputTokens;
+  final int    initialOutputTokens;
+  final double initialEstimatedCostUsd;
 
-  // ───────────────────────── injected services ────────────────────────────
+  // injected services
   final AuthService      _authSvc;
   final StoryService     _storySvc;
   final LobbyRtdbService _lobbySvc;
 
-  // ───────────────────────── callbacks to UI ──────────────────────────────
+  // UI callbacks
   final void Function(String msg)? _onError;
   final void Function(String msg)? _onInfo;
   void _error(String m) => _onError?.call(m);
   void _info (String m) => _onInfo ?.call(m);
 
-  // ───────────────────────── private state ────────────────────────────────
+  // private state
   final String _currentUid;
   late String _text;
   late List<String> _options;
   late String _title;
   late StoryPhase _phase;
+
+  // usage counters
+  int    _inputTokens      = 0;
+  int    _outputTokens     = 0;
+  double _estimatedCostUsd = 0.0;
 
   bool _busy    = false;
   bool _loading = false;
@@ -83,14 +98,18 @@ class StoryController with ChangeNotifier {
 
   StreamSubscription<DatabaseEvent>? _lobbySub;
 
-  // ───────────────────────── public getters (widget listens) ──────────────
-  String        get text     => _text;
-  List<String>  get options  => List.unmodifiable(_options);
-  String        get title    => _title;
-  StoryPhase    get phase    => _phase;
-  bool          get busy     => _busy;
-  bool          get loading  => _loading;
-  int           get inLobby  => _inLobbyCount;
+  // getters for widgets
+  String       get text     => _text;
+  List<String> get options  => List.unmodifiable(_options);
+  String       get title    => _title;
+  StoryPhase   get phase    => _phase;
+  bool         get busy     => _busy;
+  bool         get loading  => _loading;
+  int          get inLobby  => _inLobbyCount;
+
+  int    get inputTokens      => _inputTokens;
+  int    get outputTokens     => _outputTokens;
+  double get estimatedCostUsd => _estimatedCostUsd;
 
   bool get isMultiplayer => sessionId != null;
   bool get isHost {
@@ -98,47 +117,40 @@ class StoryController with ChangeNotifier {
     return slot1 is Map && slot1['userId'] == _currentUid;
   }
 
-  // ───────────────────────── lifecycle ────────────────────────────────────
+  // lifecycle
   void disposeController() {
     _lobbySub?.cancel();
   }
 
-// ───────────────────────── public API called by widget ──────────────────
-  Future<void> chooseNext(String decision) async {
-    // 0) Hard-stop if the user tapped the non-interactive “end” sentinel
-    if (decision.trim() == 'The story ends!') {
-      // Optional: let the UI flash a friendly note
-      _info?.call('The story has ended — no further actions available.');
-      return;            // <-- nothing more to do
-    }
+  /* ───────────────────────── public API ─────────────────────────────── */
 
-    // 1) Don’t double-submit while busy
+  Future<void> chooseNext(String decision) async {
+    if (decision.trim() == 'The story ends!') {
+      _info?.call('The story has ended — no further actions available.');
+      return;
+    }
     if (_busy) return;
     _setBusy(true);
 
     try {
       if (isMultiplayer) {
         if (_phase == StoryPhase.story) {
-          // first vote of the round
           await _lobbySvc.updatePhase(
             sessionId: sessionId!,
-            phase: StoryPhase.vote.asString,
+            phase    : StoryPhase.vote.asString,
             isNewGame: false,
           );
           await _submitVote(decision);
         } else if (_phase == StoryPhase.vote) {
-          // voting already in progress
           await _submitVote(decision);
         }
       } else {
-        // solo story flow
         await _advanceSolo(decision);
       }
     } finally {
       _setBusy(false);
     }
   }
-
 
   Future<void> backOneLeg() async {
     if (isMultiplayer) {
@@ -152,16 +164,17 @@ class StoryController with ChangeNotifier {
 
   Future<void> hostBringEveryoneBack() async {
     if (!isHost || !isMultiplayer) return;
-
     _setBusy(true);
     try {
-      // Broadcast the current story payload and reset lobby count & phase in one call:
       await _lobbySvc.advanceToStoryPhase(
         sessionId: sessionId!,
         storyPayload: {
-          'initialLeg': _text,
-          'options'   : List<String>.from(_options),
-          'storyTitle': _title,
+          'initialLeg'      : _text,
+          'options'         : List<String>.from(_options),
+          'storyTitle'      : _title,
+          'inputTokens'     : _inputTokens,
+          'outputTokens'    : _outputTokens,
+          'estimatedCostUsd': _estimatedCostUsd,
         },
       );
     } catch (e) {
@@ -171,63 +184,55 @@ class StoryController with ChangeNotifier {
     }
   }
 
+  /* ────────────────────── RTDB listener ────────────────────────────── */
 
-  // ───────────────────────── RTDB listener ────────────────────────────────
   void _onLobbyUpdate(DatabaseEvent event) {
     final root = (event.snapshot.value as Map?)?.cast<dynamic, dynamic>() ?? {};
 
-    // 1. lobby count
-    final newCount = root['inLobbyCount'] as int? ?? 0;
-    if (newCount != _inLobbyCount) {
-      _inLobbyCount = newCount;
-      notifyListeners();
-    }
+    // lobby count
+    _inLobbyCount = root['inLobbyCount'] as int? ?? _inLobbyCount;
 
-    // 2. players & phase
+    // players & phase
     _players = LobbyUtils.normalizePlayers(root['players']);
-    final newPhase =
-    StoryPhaseParsing.fromString(root['phase']?.toString() ?? '');
+    final newPhase = StoryPhaseParsing.fromString(root['phase']?.toString() ?? '');
     final phaseChanged = newPhase != _phase;
-    if (phaseChanged) {
-      _phase = newPhase;
-      notifyListeners();
-    }
+    if (phaseChanged) _phase = newPhase;
 
-    // 3. auto‑resolve if host
+    // auto-resolve votes if host
     if (_phase == StoryPhase.vote && isHost && !_busy) {
-      final voteCount =
-          LobbyUtils.normalizePlayers(root['storyVotes']).length;
-      final playerCount = _players.length;
-      if (playerCount > 0 && voteCount >= playerCount) {
+      final votes = LobbyUtils.normalizePlayers(root['storyVotes']).length;
+      if (_players.isNotEmpty && votes >= _players.length) {
         _resolveAndAdvance();
       }
     }
 
-    // 4. payload update
+    // incoming story payload
     if (_phase == StoryPhase.story && root['storyPayload'] != null) {
       final p = (root['storyPayload'] as Map).cast<String, dynamic>();
-      _text    = p['initialLeg'] as String;
-      _options = List<String>.from(p['options'] as List);
-      _title   = p['storyTitle'] as String;
-      notifyListeners();
+      _text            = p['initialLeg'] as String;
+      _options         = List<String>.from(p['options'] as List);
+      _title           = p['storyTitle'] as String;
+      _inputTokens      = p['inputTokens']      ?? _inputTokens;
+      _outputTokens     = p['outputTokens']     ?? _outputTokens;
+      _estimatedCostUsd = p['estimatedCostUsd'] ?? _estimatedCostUsd;
     }
 
-    // 5. detect kick (my UID gone)
-    final stillHere =
-    _players.values.any((p) => p['userId'] == _currentUid);
+    // kicked?
+    final stillHere = _players.values.any((p) => p['userId'] == _currentUid);
     if (!stillHere) {
       _lobbySub?.cancel();
       onKicked?.call();
     }
+
+    if (phaseChanged) notifyListeners();
+    notifyListeners();
   }
 
-  // ───────────────────────── vote helpers ─────────────────────────────────
+  /* ────────────────────── vote helpers ─────────────────────────────── */
+
   Future<void> _submitVote(String choice) async {
     try {
-      await _lobbySvc.submitStoryVote(
-        sessionId: sessionId!,
-        vote: choice,
-      );
+      await _lobbySvc.submitStoryVote(sessionId: sessionId!, vote: choice);
       await _maybeAutoResolve();
     } catch (e) {
       _error('$e');
@@ -237,15 +242,13 @@ class StoryController with ChangeNotifier {
 
   Future<void> _maybeAutoResolve() async {
     if (!isHost || sessionId == null) return;
-    final ref  = FirebaseDatabase.instance.ref('lobbies/$sessionId');
-    final snap = await ref.get();
-    final raw  = snap.value;
+    final snap = await FirebaseDatabase.instance.ref('lobbies/$sessionId').get();
+    final raw = snap.value;
     if (raw is! Map) return;
 
-    final players   = LobbyUtils.normalizePlayers(raw['players']);
-    final votes     = LobbyUtils.normalizePlayers(raw['storyVotes']);
-    final phaseEnum =
-    StoryPhaseParsing.fromString(raw['phase']?.toString() ?? '');
+    final players = LobbyUtils.normalizePlayers(raw['players']);
+    final votes   = LobbyUtils.normalizePlayers(raw['storyVotes']);
+    final phaseEnum = StoryPhaseParsing.fromString(raw['phase']?.toString() ?? '');
 
     if (phaseEnum == StoryPhase.vote &&
         players.isNotEmpty &&
@@ -254,7 +257,8 @@ class StoryController with ChangeNotifier {
     }
   }
 
-  // ───────────────────────── solo helpers ─────────────────────────────────
+  /* ────────────────────── solo helpers ─────────────────────────────── */
+
   Future<void> _advanceSolo(String decision) async {
     try {
       final r = (decision == kPreviousLegToken)
@@ -264,6 +268,11 @@ class StoryController with ChangeNotifier {
       _text    = r['storyLeg'] ?? 'No leg returned.';
       _options = List<String>.from(r['options'] ?? []);
       if (r.containsKey('storyTitle')) _title = r['storyTitle'];
+
+      _inputTokens      = r['inputTokens']      ?? _inputTokens;
+      _outputTokens     = r['outputTokens']     ?? _outputTokens;
+      _estimatedCostUsd = r['estimatedCostUsd'] ?? _estimatedCostUsd;
+
       notifyListeners();
     } catch (e) {
       _error('$e');
@@ -273,23 +282,30 @@ class StoryController with ChangeNotifier {
   Future<void> _soloPreviousLeg() async {
     try {
       final r = await _storySvc.getPreviousLeg();
+
       _text    = r['storyLeg'] ?? 'No leg returned.';
       _options = List<String>.from(r['options'] ?? []);
       if (r.containsKey('storyTitle')) _title = r['storyTitle'];
+
+      _inputTokens      = r['inputTokens']      ?? _inputTokens;
+      _outputTokens     = r['outputTokens']     ?? _outputTokens;
+      _estimatedCostUsd = r['estimatedCostUsd'] ?? _estimatedCostUsd;
+
       notifyListeners();
     } catch (e) {
       _error('$e');
     }
   }
 
-  // ───────────────────────── vote resolution ─────────────────────────────
+  /* ────────────────────── vote resolution ─────────────────────────── */
+
   Future<void> _resolveAndAdvance() async {
     _setBusy(true);
     try {
       await _lobbySvc.updatePhase(
         sessionId: sessionId!,
         phase: StoryPhase.results.asString,
-        isNewGame: false
+        isNewGame: false,
       );
 
       final winner = await _lobbySvc.resolveStoryVotes(sessionId!);
@@ -298,12 +314,19 @@ class StoryController with ChangeNotifier {
           ? await _storySvc.getPreviousLeg()
           : await _storySvc.getNextLeg(decision: winner);
 
+      _inputTokens      = nextPayload['inputTokens']      ?? _inputTokens;
+      _outputTokens     = nextPayload['outputTokens']     ?? _outputTokens;
+      _estimatedCostUsd = nextPayload['estimatedCostUsd'] ?? _estimatedCostUsd;
+
       await _lobbySvc.advanceToStoryPhase(
         sessionId: sessionId!,
         storyPayload: {
-          'initialLeg': nextPayload['storyLeg'],
-          'options'   : List<String>.from(nextPayload['options'] ?? []),
-          'storyTitle': nextPayload['storyTitle'],
+          'initialLeg'      : nextPayload['storyLeg'],
+          'options'         : List<String>.from(nextPayload['options'] ?? []),
+          'storyTitle'      : nextPayload['storyTitle'],
+          'inputTokens'     : _inputTokens,
+          'outputTokens'    : _outputTokens,
+          'estimatedCostUsd': _estimatedCostUsd,
         },
       );
     } catch (e) {
@@ -321,14 +344,14 @@ class StoryController with ChangeNotifier {
       try {
         await _lobbySvc.updatePhase(
           sessionId: sessionId!,
-          phase: StoryPhase.story.asString,
-          isNewGame: false
+          phase    : StoryPhase.story.asString,
+          isNewGame: false,
         );
       } catch (_) {}
     }
   }
 
-  // ───────────────────────── misc helpers ─────────────────────────────────
+  /* ────────────────────── misc helpers ─────────────────────────────── */
   void _setBusy(bool v) {
     _busy = v;
     notifyListeners();
