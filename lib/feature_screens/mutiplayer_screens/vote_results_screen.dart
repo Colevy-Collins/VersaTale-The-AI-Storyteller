@@ -1,19 +1,9 @@
-// lib/screens/vote_results_screen.dart
-// -----------------------------------------------------------------------------
-// After voting on dimensions, this screen shows the resolved winners.
-// When the host presses “Continue to Story” we request the first leg from the
-// backend, then broadcast a `storyPayload` that contains:
-//   • initialLeg / options / storyTitle
-//   • inputTokens / outputTokens / estimatedCostUsd  ← NEW
-// All participants listen for phase == 'story' and auto-navigate.
-// -----------------------------------------------------------------------------
-
+// After voting, host sees winners and can continue to story.
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/lobby_rtdb_service.dart';
 import '../../services/story_service.dart';
@@ -24,11 +14,11 @@ import '../story_screen.dart';
 
 class VoteResultsScreen extends StatefulWidget {
   const VoteResultsScreen({
-    Key? key,
+    super.key,
     required this.sessionId,
     required this.resolvedResults,
     required this.joinCode,
-  }) : super(key: key);
+  });
 
   final String sessionId;
   final Map<String, String> resolvedResults;
@@ -38,108 +28,94 @@ class VoteResultsScreen extends StatefulWidget {
   State<VoteResultsScreen> createState() => _VoteResultsScreenState();
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────── */
 
 class _VoteResultsScreenState extends State<VoteResultsScreen> {
-  // services
-  final _lobbyService = LobbyRtdbService();
-  final _storyService = StoryService();
+  final _lobbySvc = LobbyRtdbService();
+  final _storySvc = StoryService();
 
-  late final String _currentUid;
-  late final StreamSubscription _lobbySub;
+  late final String _uid;
+  late final StreamSubscription _sub;
 
-  bool _isHost  = false;
-  bool _loading = false; // continue button spinner
+  bool _isHost = false;
+  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    _currentUid = FirebaseAuth.instance.currentUser!.uid;
-
-    // listen to lobby changes
-    _lobbySub = _lobbyService
-        .lobbyStream(widget.sessionId)
-        .listen(_handleLobbyUpdate);
+    _uid = FirebaseAuth.instance.currentUser!.uid;
+    _sub = _lobbySvc.lobbyStream(widget.sessionId).listen(_onLobby);
   }
 
   @override
   void dispose() {
-    _lobbySub.cancel();
+    _sub.cancel();
     super.dispose();
   }
 
-  /* ───────────────────────── Lobby Handlers ───────────────────────────── */
+  /* ───────── lobby handlers ───────── */
 
-  void _handleLobbyUpdate(DatabaseEvent event) {
-    final root = Map<dynamic, dynamic>.from(event.snapshot.value as Map? ?? {});
-    _updateHostStatus(root);
+  void _onLobby(DatabaseEvent e) {
+    final root = Map<dynamic, dynamic>.from(e.snapshot.value as Map? ?? {});
+    _updateHost(root);
     _maybeNavigateToStory(root);
   }
 
-  void _updateHostStatus(Map<dynamic, dynamic> root) {
-    bool newHost;
+  void _updateHost(Map root) {
     final hostUid = root['hostUid'] as String?;
-    if (hostUid != null) {
-      newHost = hostUid == _currentUid;
-    } else {
-      final players = LobbyUtils.normalizePlayers(root['players']);
-      newHost = (players['1'] as Map?)?['userId'] == _currentUid;
-    }
-    if (mounted && newHost != _isHost) setState(() => _isHost = newHost);
+    final players = LobbyUtils.normalizePlayers(root['players']);
+    final isHost = (hostUid ?? (players['1']?['userId'])) == _uid;
+    if (mounted && isHost != _isHost) setState(() => _isHost = isHost);
   }
 
-  void _maybeNavigateToStory(Map<dynamic, dynamic> root) {
+  void _maybeNavigateToStory(Map root) {
     if (root['phase'] == 'story' && root['storyPayload'] != null) {
-      _navigateToStoryScreen(
-          Map<String, dynamic>.from(root['storyPayload']));
+      _goToStory(Map<String, dynamic>.from(root['storyPayload']));
     }
   }
 
-  /* ───────────────────────── Navigation ──────────────────────────────── */
+  /* ───────── navigation ───────── */
 
-  void _navigateToStoryScreen(Map<String, dynamic> payload) {
+  void _goToStory(Map payload) {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => StoryScreen(
-          sessionId : widget.sessionId,
-          joinCode  : widget.joinCode,
-          initialLeg: payload['initialLeg'] as String,
-          options   : List<String>.from(payload['options'] as List),
-          storyTitle: payload['storyTitle'] as String,
-          // seed usage counters so badge is correct on first frame
-          inputTokens     : payload['inputTokens']     ?? 0,
-          outputTokens    : payload['outputTokens']    ?? 0,
-          estimatedCostUsd: payload['estimatedCostUsd']?? 0.0,
+          sessionId: widget.sessionId,
+          joinCode: widget.joinCode,
+          initialLeg: payload['initialLeg'],
+          options: List<String>.from(payload['options'] ?? []),
+          storyTitle: payload['storyTitle'],
+          inputTokens: payload['inputTokens'] ?? 0,
+          outputTokens: payload['outputTokens'] ?? 0,
+          estimatedCostUsd: payload['estimatedCostUsd'] ?? 0.0,
         ),
       ),
     );
   }
 
-  /* ───────────────────── Host “Continue” Button ─────────────────────── */
+  /* ───────── host “continue” ───────── */
 
-  Future<void> _onContinuePressed() async {
+  Future<void> _continue() async {
     setState(() => _loading = true);
     try {
-      // 1) Ask backend for the first leg
-      final res = await _storyService.startStory(
-        decision     : 'Start Story',
+      final res = await _storySvc.startStory(
+        decision: 'Start Story',
         dimensionData: widget.resolvedResults,
-        maxLegs      : 10,
-        optionCount  : 2,
-        storyLength  : 'Short',
+        maxLegs: 10,
+        optionCount: 2,
+        storyLength: 'Short',
       );
 
-      // 2) Broadcast to RTDB (includes counters)
-      await _lobbyService.advanceToStoryPhase(
+      await _lobbySvc.advanceToStoryPhase(
         sessionId: widget.sessionId,
         storyPayload: {
-          'initialLeg'      : res['storyLeg'],
-          'options'         : List<String>.from(res['options'] ?? []),
-          'storyTitle'      : res['storyTitle'],
-          'inputTokens'     : res['inputTokens'],
-          'outputTokens'    : res['outputTokens'],
+          'initialLeg': res['storyLeg'],
+          'options': List<String>.from(res['options'] ?? []),
+          'storyTitle': res['storyTitle'],
+          'inputTokens': res['inputTokens'],
+          'outputTokens': res['outputTokens'],
           'estimatedCostUsd': res['estimatedCostUsd'],
         },
       );
@@ -149,32 +125,35 @@ class _VoteResultsScreenState extends State<VoteResultsScreen> {
     }
   }
 
-  /* ─────────────────────────── UI Build ─────────────────────────────── */
+  /* ───────── UI ───────── */
 
   @override
   Widget build(BuildContext context) {
-    final visibleDims = widget.resolvedResults.keys
-        .where((k) => !excludedDimensions.contains(k))
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    //.where((k) => !excludedDimensions.contains(k))
+    final dims = widget.resolvedResults.keys
         .toList()
       ..sort();
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: Text('Vote Results', style: GoogleFonts.atma()),
+        title: Text('Vote Results', style: tt.titleLarge),
+        backgroundColor: cs.primary,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView.separated(
-          itemCount: visibleDims.length,
+          itemCount: dims.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (_, idx) {
-            final dim = visibleDims[idx];
+          itemBuilder: (_, i) {
+            final dim = dims[i];
             return Card(
-              elevation: 2,
               child: ListTile(
-                title   : Text(dim, style: GoogleFonts.atma(fontWeight: FontWeight.bold)),
-                subtitle: Text(widget.resolvedResults[dim]!, style: GoogleFonts.atma()),
+                title: Text(dim,
+                    style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                subtitle: Text(widget.resolvedResults[dim]!, style: tt.bodyMedium),
               ),
             );
           },
@@ -184,16 +163,20 @@ class _VoteResultsScreenState extends State<VoteResultsScreen> {
         padding: const EdgeInsets.all(16),
         child: _isHost
             ? ElevatedButton(
-          onPressed: _loading ? null : _onContinuePressed,
-          style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          onPressed: _loading ? null : _continue,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            backgroundColor: cs.primary,
+            foregroundColor: cs.onPrimary,
+          ),
           child: _loading
               ? const CircularProgressIndicator()
-              : Text('Continue to Story', style: GoogleFonts.atma()),
+              : Text('Continue to Story', style: tt.labelLarge),
         )
             : Text(
           'Waiting for host to start story…',
           textAlign: TextAlign.center,
-          style: GoogleFonts.atma(fontSize: 16),
+          style: tt.bodyLarge,
         ),
       ),
     );

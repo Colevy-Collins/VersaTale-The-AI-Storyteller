@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'login_screens/main_splash_screen.dart';
 import 'new_story_screens/create_new_story_screen.dart';
@@ -9,33 +8,25 @@ import 'story_screen.dart';
 import 'mutiplayer_screens/join_multiplayer_screen.dart';
 import '../services/story_service.dart';
 import '../services/auth_service.dart';
-import '../utils/ui_utils.dart'; // Utility functions for snackbars and dialogs
+import '../utils/ui_utils.dart';
 import 'profile_screen.dart';
 
-/// Dashboard / home screen that lets the user start a new story,
-/// resume a solo story or join / manage multiplayer sessions.
-///
-/// The widget is intentionally kept *stateless*; all async work is
-/// triggered in callbacks. This keeps build() cheap and free from
-/// side‑effects.
+/// Home dashboard – start / continue stories, manage profile, etc.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  // ────────────────── Navigation helpers ──────────────────
+  /* ───────── navigation helpers ───────── */
 
-  void _push(BuildContext context, Widget page) =>
-      Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  void _push(BuildContext c, Widget p) =>
+      Navigator.push(c, MaterialPageRoute(builder: (_) => p));
 
-  void _navigateToProfile(BuildContext ctx) => _push(ctx, const ProfileScreen());
+  void _toProfile(BuildContext c)  => _push(c, const ProfileScreen());
+  void _toArchives(BuildContext c) => _push(c, const StoryArchivesScreen());
+  void _toNew(BuildContext c, {required bool group}) =>
+      _push(c, CreateNewStoryScreen(isGroup: group));
+  void _toJoin(BuildContext c)     => _push(c, const JoinMultiplayerScreen());
 
-  void _navigateToSavedStories(BuildContext ctx) =>
-      _push(ctx, const ViewStoriesScreen());
-
-  void _navigateToNewStory(BuildContext ctx, {required bool isGroup}) =>
-      _push(ctx, CreateNewStoryScreen(isGroup: isGroup));
-
-  /// Attempts to resume a solo story, showing a snack or error dialog
-  Future<void> _resumeSoloStory(BuildContext ctx) async {
+  Future<void> _resumeSolo(BuildContext ctx) async {
     try {
       final active = await StoryService().getActiveStory();
       if (active == null ||
@@ -44,13 +35,15 @@ class HomeScreen extends StatelessWidget {
         showSnack(ctx, 'No active story found.');
         return;
       }
-
       _push(
         ctx,
         StoryScreen(
-          initialLeg: active['storyLeg'] ?? '',
-          options: List<String>.from(active['options'] ?? []),
-          storyTitle: active['storyTitle'] ?? '',
+          initialLeg : active['storyLeg'] ?? '',
+          options    : List<String>.from(active['options'] ?? []),
+          storyTitle : active['storyTitle'] ?? '',
+          inputTokens     : active['inputTokens']     ?? 0,
+          outputTokens    : active['outputTokens']    ?? 0,
+          estimatedCostUsd: active['estimatedCostUsd']?? 0.0,
         ),
       );
     } catch (e) {
@@ -58,124 +51,138 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
-  void _navigateToJoinFriend(BuildContext ctx) =>
-      _push(ctx, const JoinMultiplayerScreen());
-
-  // ────────────── Dialog launchers ──────────────
-
-  /// Explains to the user that group stories must be continued from the
-  /// multiplayer lobby instead of the dashboard.
-  void _showGroupContinueInfoDialog(BuildContext ctx) {
+  void _storyOptions(BuildContext ctx) {
     showDialog(
       context: ctx,
-      builder: (_) => AlertDialog(
-        title: Text('Continue Group Story', style: GoogleFonts.kottaOne()),
-        content: Text(
-          'Group stories are resumed from continuing the story in solo and inviting others.',
-            style: GoogleFonts.kottaOne(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('OK', style: GoogleFonts.kottaOne(),),
+      builder: (_) => StoryOptionsDialog(
+        onStartStory: (g) {
+          Navigator.pop(ctx);
+          _toNew(ctx, group: g);
+        },
+        onContinueStory: (g) async {
+          Navigator.pop(ctx);
+          if (g) {
+            showDialog(
+              context: ctx,
+              builder: (_) => AlertDialog(
+                title   : const Text('Continue Group Story'),
+                content : const Text(
+                  'Group stories are resumed from the multiplayer lobby. '
+                      'Invite others after continuing solo.',
+                ),
+                actions : [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('OK')),
+                ],
+              ),
+            );
+            return;
+          }
+          await _resumeSolo(ctx);
+        },
+      ),
+    );
+  }
+
+  /* ───────── build ───────── */
+
+  @override
+  Widget build(BuildContext context) {
+    final width      = MediaQuery.of(context).size.width;
+    final titleSize  = min(width * 0.10, 80.0);
+    final btnSize    = min(width * 0.04, 20.0);
+    final logoutSize = min(width * 0.03, 16.0);
+
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          const _DashboardBackground(),
+          Center(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 80),
+                  Text('VersaTale',
+                      textAlign: TextAlign.center,
+                      style: tt.displayLarge?.copyWith(
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.bold,
+                        foreground: Paint()
+                          ..style = PaintingStyle.stroke
+                          ..strokeWidth = 2
+                          ..color = Colors.white,
+                        shadows: const [
+                          Shadow(
+                              offset: Offset(2, 2),
+                              blurRadius: 3,
+                              color: Colors.black26)
+                        ],
+                      )),
+                  const SizedBox(height: 40),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _DashboardButton(
+                          label: 'Story Archives',
+                          onPressed: () => _toArchives(context),
+                          fontSize: btnSize),
+                      _DashboardButton(
+                          label: 'New Story',
+                          onPressed: () => _storyOptions(context),
+                          fontSize: btnSize),
+                      _DashboardButton(
+                          label: 'Manage Profile',
+                          onPressed: () => _toProfile(context),
+                          fontSize: btnSize),
+                      _DashboardButton(
+                          label: 'Join a Friend',
+                          onPressed: () => _toJoin(context),
+                          fontSize: btnSize),
+                    ],
+                  ),
+                  const SizedBox(height: 80),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: 20,
+            left: 16,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.surface.withOpacity(.7),
+                foregroundColor: cs.onSurface,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () async {
+                await AuthService().signOut();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const MainSplashScreen()),
+                );
+              },
+              child: Text('Log Out',
+                  style: tt.labelLarge?.copyWith(
+                    fontSize: logoutSize,
+                    fontWeight: FontWeight.bold,
+                  )),
+            ),
           ),
         ],
       ),
     );
   }
-
-  void _showStoryOptionsDialog(BuildContext ctx) {
-    showDialog(
-      context: ctx,
-      builder: (_) => StoryOptionsDialog(
-        onStartStory: (isGroup) {
-          Navigator.pop(ctx); // close dialog
-          _navigateToNewStory(ctx, isGroup: isGroup);
-        },
-        onContinueStory: (isGroup) async {
-          Navigator.pop(ctx);
-
-          // Group → show explanation dialog
-          if (isGroup) {
-            _showGroupContinueInfoDialog(ctx);
-            return;
-          }
-
-          // Solo → attempt to resume, only if one exists
-          await _resumeSoloStory(ctx);
-        },
-      ),
-    );
-  }
-
-  // ─────────────────────── build ──────────────────────
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        final w = constraints.maxWidth;
-        final titleSize = min(w * 0.10, 80.0);
-        final buttonSize = min(w * 0.04, 20.0);
-        final logoutSize = min(w * 0.03, 16.0);
-
-        return Scaffold(
-          body: Stack(
-            children: [
-              const _DashboardBackground(),
-              Center(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 80),
-                      _AppTitle(fontSize: titleSize),
-                      const SizedBox(height: 40),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          _DashboardButton(
-                            label: 'Story Archives',
-                            onPressed: () => _navigateToSavedStories(ctx),
-                            fontSize: buttonSize,
-                          ),
-                          _DashboardButton(
-                            label: 'New Story',
-                            onPressed: () => _showStoryOptionsDialog(ctx),
-                            fontSize: buttonSize,
-                          ),
-                          _DashboardButton(
-                            label: 'Manage Profile',
-                            onPressed: () => _navigateToProfile(ctx),
-                            fontSize: buttonSize,
-                          ),
-                          _DashboardButton(
-                            label: 'Join a Friend',
-                            onPressed: () => _navigateToJoinFriend(ctx),
-                            fontSize: buttonSize,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 80),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 20,
-                left: 16,
-                child: _LogoutButton(fontSize: logoutSize),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 }
 
-// ────────────────────  Reusable UI pieces  ─────────────────────
+/* ───────── reusable pieces ───────── */
 
 class _DashboardBackground extends StatelessWidget {
   const _DashboardBackground();
@@ -195,41 +202,9 @@ class _DashboardBackground extends StatelessWidget {
   }
 }
 
-class _AppTitle extends StatelessWidget {
-  const _AppTitle({required this.fontSize});
-
-  final double fontSize;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      'VersaTale',
-      style: GoogleFonts.kottaOne(
-        fontSize: fontSize,
-        fontWeight: FontWeight.bold,
-        foreground: Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..color = Colors.white,
-        shadows: const [
-          Shadow(
-            offset: Offset(2, 2),
-            blurRadius: 3,
-            color: Colors.black26,
-          ),
-        ],
-      ),
-      textAlign: TextAlign.center,
-    );
-  }
-}
-
 class _DashboardButton extends StatelessWidget {
-  const _DashboardButton({
-    required this.label,
-    required this.onPressed,
-    required this.fontSize,
-  });
+  const _DashboardButton(
+      {required this.label, required this.onPressed, required this.fontSize});
 
   final String label;
   final VoidCallback onPressed;
@@ -237,112 +212,86 @@ class _DashboardButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: cs.surface.withOpacity(.7),
+        foregroundColor: cs.onSurface,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        backgroundColor: Colors.white.withOpacity(0.7),
+        shape:
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       onPressed: onPressed,
-      child: Text(
-        label,
-        style: GoogleFonts.kottaOne(
-          fontSize: fontSize,
-          fontWeight: FontWeight.bold,
-          color: const Color(0xFF453E2C),
-        ),
-      ),
+      child: Text(label,
+          style: tt.labelLarge?.copyWith(
+              fontSize: fontSize, fontWeight: FontWeight.bold)),
     );
   }
 }
 
-class _LogoutButton extends StatelessWidget {
-  const _LogoutButton({required this.fontSize});
-
-  final double fontSize;
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        backgroundColor: Colors.white.withOpacity(0.7),
-      ),
-      onPressed: () async {
-        await AuthService().signOut();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainSplashScreen()),
-        );
-      },
-      child: Text(
-        'Log Out',
-        style: GoogleFonts.kottaOne(
-          fontSize: fontSize,
-          fontWeight: FontWeight.bold,
-          color: const Color(0xFF453E2C),
-        ),
-      ),
-    );
-  }
-}
-
-// ────────────────── Story Options Dialog ────────────────────
+/* ───────── story options dialog ───────── */
 
 class StoryOptionsDialog extends StatefulWidget {
-  const StoryOptionsDialog({
-    super.key,
-    required this.onStartStory,
-    required this.onContinueStory,
-  });
+  const StoryOptionsDialog(
+      {super.key, required this.onStartStory, required this.onContinueStory});
 
-  final void Function(bool isGroup) onStartStory;
-  final void Function(bool isGroup) onContinueStory;
+  final void Function(bool group) onStartStory;
+  final void Function(bool group) onContinueStory;
 
   @override
   State<StoryOptionsDialog> createState() => _StoryOptionsDialogState();
 }
 
 class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
-  bool _isGroup = false; // false = solo
+  bool _group = false;
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    Widget tile(String title, bool value) => ListTile(
+      title: Text(title, style: tt.bodyLarge),
+      leading: Radio<bool>(
+        value: value,
+        groupValue: _group,
+        onChanged: (v) => setState(() => _group = v ?? false),
+      ),
+    );
+
     return AlertDialog(
-      title: Text('Story Options', style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold)),
+      title: Text('Story Options',
+          style:
+          tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _storyTypeTile('Solo Story', isGroup: false),
-          _storyTypeTile('Group Story', isGroup: true),
+          tile('Solo Story', false),
+          tile('Group Story', true),
         ],
       ),
       actions: [
         TextButton(
           onPressed: Navigator.of(context).pop,
-          child: Text('Cancel', style: GoogleFonts.kottaOne()),
+          child: Text('Cancel', style: tt.labelLarge),
         ),
         ElevatedButton(
-          onPressed: () => widget.onStartStory(_isGroup),
-          child: Text('Start Story', style: GoogleFonts.kottaOne()),
+          onPressed: () => widget.onStartStory(_group),
+          style: ElevatedButton.styleFrom(
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary),
+          child: Text('Start Story', style: tt.labelLarge),
         ),
         ElevatedButton(
-          onPressed: () => widget.onContinueStory(_isGroup),
-          child: Text('Continue Story', style: GoogleFonts.kottaOne()),
+          onPressed: () => widget.onContinueStory(_group),
+          style: ElevatedButton.styleFrom(
+              backgroundColor: cs.secondary,
+              foregroundColor: cs.onSecondary),
+          child: Text('Continue Story', style: tt.labelLarge),
         ),
       ],
-    );
-  }
-
-  Widget _storyTypeTile(String title, {required bool isGroup}) {
-    return ListTile(
-      title: Text(title, style: GoogleFonts.kottaOne()),
-      leading: Radio<bool>(
-        value: isGroup,
-        groupValue: _isGroup,
-        onChanged: (value) => setState(() => _isGroup = value ?? false),
-      ),
     );
   }
 }

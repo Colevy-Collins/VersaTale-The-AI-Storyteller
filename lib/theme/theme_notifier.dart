@@ -1,64 +1,78 @@
-// lib/theme/theme_notifier.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import 'app_palettes.dart';
 import '../services/story_service.dart';
 
-/// A ChangeNotifier that holds the current palette and font,
-/// allows updating them (and persisting to the backend),
-/// and exposes a ThemeData that rebuilds the app when modified.
+/// Provides the current palette & font to the whole app and guarantees
+/// sane defaults when user data references values no longer present.
 class ThemeNotifier extends ChangeNotifier {
-  // Default values if the user hasn't chosen yet
-  AppPalette _palette = AppPalette.sereneSky;
-  String     _fontFamily = 'Kotta One';
+  /* current selections (start with defaults) */
+  AppPalette _palette    = kDefaultPalette;
+  String     _fontFamily = kDefaultFont;
 
-  /// Expose the current palette and font for UI selectors.
+  /* getters for UI */
   AppPalette get currentPalette => _palette;
   String     get currentFont    => _fontFamily;
 
-  /// Build a ThemeData based on the selected palette & font.
+  /* ── ThemeData (always safe) ── */
   ThemeData get theme {
-    final appTheme = kThemes[_palette]!;
+    final scheme = kThemes[_palette]?.colors ?? kThemes[kDefaultPalette]!.colors;
+    final base   = scheme.brightness == Brightness.dark
+        ? ThemeData.dark().textTheme
+        : ThemeData.light().textTheme;
+
+    final text = textThemeFromFont(_fontFamily, base).apply(
+      bodyColor   : scheme.onBackground,
+      displayColor: scheme.onBackground,
+    );
+
     return ThemeData(
-      colorScheme: appTheme.colors,
-      textTheme:   appTheme.text.apply(fontFamily: _fontFamily),
       useMaterial3: true,
+      colorScheme : scheme,
+      textTheme   : text,
+      fontFamily  : _fontFamily,
     );
   }
 
-  /// Load palette & font from a profile JSON returned by getUserProfile().
+  /* ── load profile with validation ── */
   void loadFromProfile(Map<String, dynamic> json) {
     final palKey = json['preferredPalette'] as String?;
-    if (palKey != null) {
-      _palette = AppPalette.values.firstWhere(
-            (p) => p.name == palKey,
-        orElse: () => _palette,
-      );
+    final font   = json['preferredFont']   as String?;
+
+    // Palette validation
+    if (palKey != null &&
+        AppPalette.values.any((p) => p.name == palKey) &&
+        kThemes.containsKey(AppPalette.values.firstWhere((p) => p.name == palKey))) {
+      _palette = AppPalette.values.firstWhere((p) => p.name == palKey);
+    } else if (palKey != null) {
+      debugPrint('⚠️  Unknown palette “$palKey” – using $kDefaultPalette');
+      _palette = kDefaultPalette;
     }
-    final font = json['preferredFont'] as String?;
-    if (font != null) {
-      _fontFamily = font;
+
+    // Font validation
+    if (isKnownFont(font)) {
+      _fontFamily = font!;
+    } else if (font != null) {
+      debugPrint('⚠️  Unknown font “$font” – using $kDefaultFont');
+      _fontFamily = kDefaultFont;
     }
+
     notifyListeners();
   }
 
-  /// Update the palette, notify listeners, and persist the choice.
+  /* ── update helpers (ignore invalid data) ── */
   Future<void> updatePalette(AppPalette p, StoryService api) async {
+    if (!kThemes.containsKey(p)) return; // ignore removed palette
     _palette = p;
     notifyListeners();
-    await api.updateUserTheme(
-      paletteKey: p.name,
-      fontFamily: _fontFamily,
-    );
+    await api.updateUserTheme(paletteKey: p.name, fontFamily: _fontFamily);
   }
 
-  /// Update the font, notify listeners, and persist the choice.
-  Future<void> updateFont(String family, StoryService api) async {
-    _fontFamily = family;
+  Future<void> updateFont(String fam, StoryService api) async {
+    if (!isKnownFont(fam)) return;       // ignore removed font
+    _fontFamily = fam;
     notifyListeners();
-    await api.updateUserTheme(
-      paletteKey: _palette.name,
-      fontFamily: family,
-    );
+    await api.updateUserTheme(paletteKey: _palette.name, fontFamily: fam);
   }
 }

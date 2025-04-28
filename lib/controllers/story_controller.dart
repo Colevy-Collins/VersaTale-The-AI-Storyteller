@@ -28,7 +28,7 @@ class StoryController with ChangeNotifier {
     // host-widget callbacks
     void Function(String msg)? onError,
     void Function(String msg)? onInfo,
-    // NEW: seed counters so badge correct on first frame
+    // seed counters so badge is correct on first frame
     this.initialInputTokens      = 0,
     this.initialOutputTokens     = 0,
     this.initialEstimatedCostUsd = 0.0,
@@ -85,7 +85,7 @@ class StoryController with ChangeNotifier {
   late String _title;
   late StoryPhase _phase;
 
-  // usage counters
+  // usage counters (monotonic)
   int    _inputTokens      = 0;
   int    _outputTokens     = 0;
   double _estimatedCostUsd = 0.0;
@@ -120,6 +120,20 @@ class StoryController with ChangeNotifier {
   // lifecycle
   void disposeController() {
     _lobbySub?.cancel();
+  }
+
+  /* ──────────────────── NEW: monotonic counter helper ─────────────────── */
+  void _mergeCounters(Map<String, dynamic> src) {
+    final inTok = src['inputTokens'] as int?;
+    if (inTok != null && inTok > _inputTokens) _inputTokens = inTok;
+
+    final outTok = src['outputTokens'] as int?;
+    if (outTok != null && outTok > _outputTokens) _outputTokens = outTok;
+
+    final cost = src['estimatedCostUsd'] as num?;
+    if (cost != null && cost > _estimatedCostUsd) {
+      _estimatedCostUsd = cost.toDouble();
+    }
   }
 
   /* ───────────────────────── public API ─────────────────────────────── */
@@ -209,12 +223,10 @@ class StoryController with ChangeNotifier {
     // incoming story payload
     if (_phase == StoryPhase.story && root['storyPayload'] != null) {
       final p = (root['storyPayload'] as Map).cast<String, dynamic>();
-      _text            = p['initialLeg'] as String;
-      _options         = List<String>.from(p['options'] as List);
-      _title           = p['storyTitle'] as String;
-      _inputTokens      = p['inputTokens']      ?? _inputTokens;
-      _outputTokens     = p['outputTokens']     ?? _outputTokens;
-      _estimatedCostUsd = p['estimatedCostUsd'] ?? _estimatedCostUsd;
+      _text    = p['initialLeg'] as String;
+      _options = List<String>.from(p['options'] as List);
+      _title   = p['storyTitle'] as String;
+      _mergeCounters(p);                // ← keep counters monotonic
     }
 
     // kicked?
@@ -269,10 +281,7 @@ class StoryController with ChangeNotifier {
       _options = List<String>.from(r['options'] ?? []);
       if (r.containsKey('storyTitle')) _title = r['storyTitle'];
 
-      _inputTokens      = r['inputTokens']      ?? _inputTokens;
-      _outputTokens     = r['outputTokens']     ?? _outputTokens;
-      _estimatedCostUsd = r['estimatedCostUsd'] ?? _estimatedCostUsd;
-
+      _mergeCounters(r);               // ← monotonic update
       notifyListeners();
     } catch (e) {
       _error('$e');
@@ -287,10 +296,7 @@ class StoryController with ChangeNotifier {
       _options = List<String>.from(r['options'] ?? []);
       if (r.containsKey('storyTitle')) _title = r['storyTitle'];
 
-      _inputTokens      = r['inputTokens']      ?? _inputTokens;
-      _outputTokens     = r['outputTokens']     ?? _outputTokens;
-      _estimatedCostUsd = r['estimatedCostUsd'] ?? _estimatedCostUsd;
-
+      _mergeCounters(r);               // ← monotonic update
       notifyListeners();
     } catch (e) {
       _error('$e');
@@ -314,9 +320,7 @@ class StoryController with ChangeNotifier {
           ? await _storySvc.getPreviousLeg()
           : await _storySvc.getNextLeg(decision: winner);
 
-      _inputTokens      = nextPayload['inputTokens']      ?? _inputTokens;
-      _outputTokens     = nextPayload['outputTokens']     ?? _outputTokens;
-      _estimatedCostUsd = nextPayload['estimatedCostUsd'] ?? _estimatedCostUsd;
+      _mergeCounters(nextPayload);      // ← monotonic update
 
       await _lobbySvc.advanceToStoryPhase(
         sessionId: sessionId!,

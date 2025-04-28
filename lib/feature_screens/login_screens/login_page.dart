@@ -1,5 +1,3 @@
-// lib/screens/login_screens/login_page.dart
-
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,46 +10,43 @@ import '../dashboard_screen.dart';
 import 'forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
+
   @override
-  _LoginPageState createState() => _LoginPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _emailController    = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _authService        = AuthService();
-  final _storyService       = StoryService();
-  final _formKey            = GlobalKey<FormState>();
-  bool _isLoading = false;
+  final _emailCtrl = TextEditingController();
+  final _pwCtrl    = TextEditingController();
+  final _authSvc   = AuthService();
+  final _storySvc  = StoryService();
+  final _formKey   = GlobalKey<FormState>();
+
+  bool _loading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _emailCtrl.dispose();
+    _pwCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
 
-    final res = await _authService.signIn(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
+    final res = await _authSvc.signIn(
+      _emailCtrl.text.trim(),
+      _pwCtrl.text.trim(),
     );
 
     if (res.user != null) {
       try {
-        // 1️⃣ Load the user’s saved theme from backend
-        final profile = await _storyService.getUserProfile();
-        context.read<ThemeNotifier>().loadFromProfile(profile);
-
-        // 2️⃣ Update last access
-        await _storyService.updateLastAccessDate();
-      } catch (_) {
-        // silently ignore or log error
-      }
+        final profile = await _storySvc.getUserProfile();
+        if (mounted) context.read<ThemeNotifier>().loadFromProfile(profile);
+        await _storySvc.updateLastAccessDate();
+      } catch (_) {}
 
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -62,31 +57,26 @@ class _LoginPageState extends State<LoginPage> {
       showAuthSnackBar(context, res.message, background: Colors.red);
     }
 
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final w        = MediaQuery.of(context).size.width;
-    final fontSize = min(w * 0.05, 22.0);
+    final w   = MediaQuery.of(context).size.width;
+    final sz  = min(w * .05, 22.0);
+    final cs  = Theme.of(context).colorScheme;
+    final tt  = Theme.of(context).textTheme;
 
     return Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
-            // Background image
             Positioned.fill(
-              child: Image.asset(
-                'assets/versatale_home_image.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/versatale_home_image.png',
+                  fit: BoxFit.cover),
             ),
-            // Back button
-            const Positioned(
-              top: 10, left: 10,
-              child: AuthBackButton(),
-            ),
-            // Login form
+            const Positioned(top: 10, left: 10, child: AuthBackButton()),
+
             Form(
               key: _formKey,
               child: Center(
@@ -98,91 +88,66 @@ class _LoginPageState extends State<LoginPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         authTextFormField(
-                          controller: _emailController,
-                          label: 'Email',
-                          fontSize: fontSize,
-                          validator: (v) => (v ?? '').isEmpty ? 'Enter email' : null,
+                          context   : context,
+                          controller: _emailCtrl,
+                          label     : 'Email',
+                          validator : (v) =>
+                          (v ?? '').isEmpty ? 'Enter email' : null,
                         ),
                         const SizedBox(height: 15),
                         authTextFormField(
-                          controller: _passwordController,
-                          label: 'Password',
-                          fontSize: fontSize,
+                          context   : context,
+                          controller: _pwCtrl,
+                          label     : 'Password',
                           obscureText: true,
-                          validator: (v) => (v ?? '').isEmpty ? 'Enter password' : null,
+                          validator : (v) =>
+                          (v ?? '').isEmpty ? 'Enter password' : null,
                         ),
                         const SizedBox(height: 5),
+
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
+                            style: TextButton.styleFrom(
+                              backgroundColor:
+                              cs.surfaceVariant.withOpacity(.6),
+                            ),
                             onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const ForgotPasswordPage(),
-                              ),
+                                  builder: (_) => const ForgotPasswordPage()),
                             ),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4,
-                              ),
-                              backgroundColor: Colors.black.withOpacity(0.4),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            child: Text(
-                              'Forgot Password?',
-                              style: TextStyle(
-                                fontSize: fontSize * 0.8,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                decoration: TextDecoration.underline,
-                                shadows: const [
-                                  Shadow(
-                                    color: Colors.black,
-                                    offset: Offset(1, 1),
-                                    blurRadius: 2,
-                                  ),
-                                ],
-                              ),
-                            ),
+                            child: Text('Forgot Password?',
+                                style: tt.labelMedium?.copyWith(
+                                  color      : cs.onSurface,
+                                  decoration : TextDecoration.underline,
+                                )),
                           ),
                         ),
                         const SizedBox(height: 20),
+
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _isLoading ? null : _login,
+                            onPressed: _loading ? null : _login,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.black.withOpacity(0.4),
+                              backgroundColor: cs.primary.withOpacity(.85),
+                              foregroundColor: cs.onPrimary,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              side: const BorderSide(color: Colors.white, width: 2),
                             ),
-                            child: _isLoading
+                            child: _loading
                                 ? const SizedBox(
-                              width: 24, height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                                : Text(
-                              'Log In',
-                              style: TextStyle(
-                                fontSize: fontSize,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                shadows: const [
-                                  Shadow(
-                                    color: Colors.black,
-                                    offset: Offset(1, 1),
-                                    blurRadius: 2,
-                                  ),
-                                ],
-                              ),
-                            ),
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2))
+                                : Text('Log In',
+                                style: tt.labelLarge?.copyWith(
+                                  fontSize  : sz,
+                                  fontWeight: FontWeight.bold,
+                                )),
                           ),
                         ),
                       ],

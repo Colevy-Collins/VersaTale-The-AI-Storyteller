@@ -74,11 +74,13 @@ flutter:
     - assets/versatale_dashboard_image.png
     - assets/versatale_dashboard2_image.png
     - assets/reading.jpg
+    - assets/reading2.png
     - assets/parchment_updated.png
     - assets/best_scroll.jpg
     - assets/quill.png
     - assets/quill_ink.jpg
     - assets/tutorial.pdf
+    - assets/quill2.png
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

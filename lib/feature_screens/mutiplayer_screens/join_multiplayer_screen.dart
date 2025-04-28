@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/join_controller.dart';
@@ -10,7 +9,7 @@ import '../../feature_screens/new_story_screens/create_new_story_screen.dart';
 import 'multiplayer_host_lobby_screen.dart';
 
 class JoinMultiplayerScreen extends StatelessWidget {
-  const JoinMultiplayerScreen({Key? key}) : super(key: key);
+  const JoinMultiplayerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -24,11 +23,13 @@ class JoinMultiplayerScreen extends StatelessWidget {
   }
 }
 
+/* ───────────────────────────────────────────────────────────────────── */
+
 class _JoinView extends StatefulWidget {
-  const _JoinView({Key? key}) : super(key: key);
+  const _JoinView({super.key});
 
   @override
-  __JoinViewState createState() => __JoinViewState();
+  State<_JoinView> createState() => __JoinViewState();
 }
 
 class __JoinViewState extends State<_JoinView> {
@@ -42,9 +43,9 @@ class __JoinViewState extends State<_JoinView> {
     super.dispose();
   }
 
-  Future<void> _onJoinPressed() async {
-    final ctrl = context.read<JoinController>();
-    final code = _codeCtrl.text.trim().toUpperCase();
+  Future<void> _join() async {
+    final ctrl  = context.read<JoinController>();
+    final code  = _codeCtrl.text.trim().toUpperCase();
     if (code.isEmpty) {
       showSnack(context, 'Please enter a join code.');
       return;
@@ -55,12 +56,12 @@ class __JoinViewState extends State<_JoinView> {
         : _nameCtrl.text.trim();
 
     try {
-      final entry = await ctrl.join(joinCode: code, displayName: name);
-      final sessionId = entry.key;
+      final entry      = await ctrl.join(joinCode: code, displayName: name);
+      final sessionId  = entry.key;
       final playersMap = entry.value;
 
       final isNew = await ctrl.checkNewGame(sessionId);
-      final next = isNew
+      final next  = isNew
           ? CreateNewStoryScreen(
         isGroup: true,
         sessionId: sessionId,
@@ -87,31 +88,36 @@ class __JoinViewState extends State<_JoinView> {
 
   @override
   Widget build(BuildContext context) {
-    final isJoining = context.watch<JoinController>().isJoining;
+    final cs      = Theme.of(context).colorScheme;
+    final tt      = Theme.of(context).textTheme;
+    final joining = context.watch<JoinController>().isJoining;
+
+    InputDecoration _dec(String label) => InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+    );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFDE7), // really pale yellow
+      // If you’ve set a pale-yellow scaffold background in your theme
+      // this will pick it up automatically; otherwise uncomment the line below.
+      // backgroundColor: const Color(0xFFFFFBEA), // extra-pale yellow
       appBar: AppBar(
+        backgroundColor: cs.primary,
         centerTitle: true,
-        title: Text(
-          'Join Game',
-          style: GoogleFonts.carterOne(),
-        ),
+        title: Text('Join Game', style: tt.titleLarge),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const SizedBox(height: 160),
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 300),
+      body: Center(                                        // <─ NEW
+        child: SingleChildScrollView(                     // <─ NEW
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
                 child: TextField(
                   controller: _codeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Join Code',
-                    labelStyle: TextStyle(color: Colors.black),
-                  ),
+                  decoration: _dec('Join Code'),
                   textAlign: TextAlign.center,
                   textCapitalization: TextCapitalization.characters,
                   onChanged: (v) {
@@ -119,61 +125,46 @@ class __JoinViewState extends State<_JoinView> {
                     if (v != up) {
                       _codeCtrl.value = _codeCtrl.value.copyWith(
                         text: up,
-                        selection: TextSelection.collapsed(offset: up.length),
+                        selection:
+                        TextSelection.collapsed(offset: up.length),
                       );
                     }
                   },
-                  style: const TextStyle(color: Colors.black),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 300),
+              const SizedBox(height: 16),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
                 child: TextField(
                   controller: _nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Your Name',
-                    labelStyle: TextStyle(color: Colors.black),
-                  ),
+                  decoration: _dec('Your Name'),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: isJoining ? null : _onJoinPressed,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(200, 48),
-              ),
-              child: isJoining
-                  ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-                  : Text(
-                'Join Session',
-                style: GoogleFonts.kottaOne(
-                  textStyle: const TextStyle(color: Colors.black),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: joining ? null : _join,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(200, 48),
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
                 ),
+                child: joining
+                    ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : Text('Join Session', style: tt.labelLarge),
               ),
-            ),
-            const SizedBox(height: 24),
-            // Bottom image
-            Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Image.asset(
-                  'assets/quill.png',
-                  fit: BoxFit.contain,
-                  width: 200,
-                ),
+              const SizedBox(height: 40),
+              Image.asset(
+                'assets/quill2.png',
+                width: 180,
+                fit: BoxFit.contain,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

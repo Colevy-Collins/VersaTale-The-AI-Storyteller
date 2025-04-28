@@ -1,7 +1,6 @@
-// lib/screens/register_screen.dart
-
 import 'dart:math';
 import 'package:flutter/material.dart';
+
 import '../../widgets/auth_widgets.dart';
 import '../../services/auth_service.dart';
 import '../../services/story_service.dart';
@@ -9,39 +8,40 @@ import '../dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
+
   @override
-  _RegisterScreenState createState() => _RegisterScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _emailController    = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _authService        = AuthService();
-  final _storyService       = StoryService();
-  final _formKey            = GlobalKey<FormState>();
-  bool _isLoading = false;
+  final _emailCtrl = TextEditingController();
+  final _pwCtrl    = TextEditingController();
+  final _authSvc   = AuthService();
+  final _storySvc  = StoryService();
+  final _formKey   = GlobalKey<FormState>();
+
+  bool _loading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _emailCtrl.dispose();
+    _pwCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
 
-    final res = await _authService.signUp(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
+    final res = await _authSvc.signUp(
+      _emailCtrl.text.trim(),
+      _pwCtrl.text.trim(),
     );
 
     if (res.user != null) {
-      try {
-        await _storyService.updateLastAccessDate();
-      } catch (_) {}
-      showAuthSnackBar(context, 'Registration successful!', background: Colors.green);
+      try { await _storySvc.updateLastAccessDate(); } catch (_) {}
+      showAuthSnackBar(context, 'Registration successful!',
+          background: Colors.green);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -51,31 +51,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       showAuthSnackBar(context, res.message, background: Colors.red);
     }
 
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    final fontSize = min(w * 0.05, 22.0);
+    final w   = MediaQuery.of(context).size.width;
+    final sz  = min(w * .05, 22.0);           // responsive label size
+    final cs  = Theme.of(context).colorScheme;
+    final tt  = Theme.of(context).textTheme;
 
     return Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
-            // Background
             Positioned.fill(
-              child: Image.asset(
-                'assets/versatale_home_image.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/versatale_home_image.png',
+                  fit: BoxFit.cover),
             ),
-            // Back button
-            const Positioned(
-              top: 10, left: 10,
-              child: AuthBackButton(),
-            ),
-            // Form
+            const Positioned(top: 10, left: 10, child: AuthBackButton()),
+
             Form(
               key: _formKey,
               child: Center(
@@ -86,66 +81,61 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Create an Account',
-                          style: TextStyle(
-                            fontSize: fontSize + 4,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            shadows: const [
-                              Shadow(
-                                  color: Colors.black,
-                                  offset: Offset(1, 1),
-                                  blurRadius: 2),
-                            ],
-                          ),
-                        ),
+                        Text('Create an Account',
+                            style: tt.titleLarge?.copyWith(
+                              fontSize : sz + 4,
+                              color    : Colors.white,
+                              fontWeight: FontWeight.bold,
+                              shadows  : const [
+                                Shadow(
+                                    color: Colors.black,
+                                    offset: Offset(1, 1),
+                                    blurRadius: 2),
+                              ],
+                            )),
                         const SizedBox(height: 30),
+
                         authTextFormField(
-                          controller: _emailController,
-                          label: 'Email',
-                          fontSize: fontSize,
-                          validator: (v) => (v ?? '').isEmpty ? 'Enter email' : null,
+                          context   : context,
+                          controller: _emailCtrl,
+                          label     : 'Email',
+                          validator : (v) =>
+                          (v ?? '').isEmpty ? 'Enter email' : null,
                         ),
                         const SizedBox(height: 15),
+
                         authTextFormField(
-                          controller: _passwordController,
-                          label: 'Password',
-                          fontSize: fontSize,
+                          context   : context,
+                          controller: _pwCtrl,
+                          label     : 'Password',
                           obscureText: true,
-                          validator: (v) => (v ?? '').isEmpty ? 'Enter password' : null,
+                          validator : (v) =>
+                          (v ?? '').isEmpty ? 'Enter password' : null,
                         ),
                         const SizedBox(height: 20),
+
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _isLoading ? null : _register,
+                            onPressed: _loading ? null : _register,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.black.withOpacity(0.4),
+                              backgroundColor: cs.primary.withOpacity(.85),
+                              foregroundColor: cs.onPrimary,
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              side: const BorderSide(color: Colors.white, width: 2),
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                              width: 24, height: 24,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                                : Text(
-                              'Register',
-                              style: TextStyle(
-                                fontSize: fontSize,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                shadows: const [
-                                  Shadow(
-                                      color: Colors.black,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2),
-                                ],
+                                borderRadius: BorderRadius.circular(8),
                               ),
                             ),
+                            child: _loading
+                                ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2))
+                                : Text('Register',
+                                style: tt.labelLarge?.copyWith(
+                                  fontSize  : sz,
+                                  fontWeight: FontWeight.bold,
+                                )),
                           ),
                         ),
                       ],

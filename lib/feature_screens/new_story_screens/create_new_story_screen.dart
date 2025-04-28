@@ -1,15 +1,13 @@
 // lib/screens/create_new_story_screen.dart
 // -----------------------------------------------------------------------------
 // Lets the user (solo or host) pick dimension values and launch a story.
-// When starting a solo story we now pass inputTokens / outputTokens / cost
-// to StoryScreen so the badge is correct from the first leg.
+// Now fully theme-aware: all colours & fonts come from Theme.of(context).
 // -----------------------------------------------------------------------------
 
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/dimension_map.dart';        // groupedDimensionOptions
 import '../../services/dimension_exclusions.dart'; // excludedDimensions
@@ -206,11 +204,14 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final baseColor   = const Color(0xFFE3F2FD);
-    final cardColor   = const Color(0xFFECF0F3);
-    final accentColor = const Color(0xFFFFB74D);
-    final textColor   = const Color(0xFF333333);
-    final shadowColor = const Color(0xFFE0E0E0);
+    // Pull colours & fonts from the active theme
+    final colours   = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final cardColor   = colours.surface;
+    final accentColor = colours.secondary;
+    final textColor   = colours.onBackground;
+    final shadowColor = Theme.of(context).shadowColor;
 
     final joiner = widget.isGroup && widget.sessionId != null;
 
@@ -244,14 +245,17 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         return Theme(
           data: screenTheme,
           child: Scaffold(
-            backgroundColor: baseColor,
+            backgroundColor: colours.background,
             body: SafeArea(
               child: _loading
                   ? Center(
                 child: SizedBox(
                   width: 48,
                   height: 48,
-                  child: CircularProgressIndicator(strokeWidth: 6, color: accentColor),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 6,
+                    color: accentColor,
+                  ),
                 ),
               )
                   : Stack(
@@ -260,7 +264,11 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                   Center(
                     child: Opacity(
                       opacity: 0.6,
-                      child: Image.asset('assets/best_scroll.jpg', width: bgImgW, fit: BoxFit.cover),
+                      child: Image.asset(
+                        'assets/best_scroll.jpg',
+                        width: bgImgW,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                   // main content
@@ -269,35 +277,43 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(children: [
-                          IconButton(icon: const Icon(Icons.arrow_back), color: textColor,
-                              onPressed: () => Navigator.pop(context)),
-                        ]),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back),
+                              color: textColor,
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
                         SizedBox(height: fs * 1.5),
                         Text(
                           widget.isGroup
                               ? (joiner ? 'Vote on Story Settings' : 'Configure Group Story')
                               : 'Create Your New Adventure',
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.kottaOne(
-                              fontSize: fs + 8, fontWeight: FontWeight.bold, color: textColor),
+                          style: textTheme.headlineSmall?.copyWith(
+                            fontSize: fs + 8,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
                         ),
                         SizedBox(height: fs * 1.5),
                         Center(
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 450),
                             child: DimensionPicker(
-                              groups: _dimensionGroups,
-                              choices: _userChoices,
-                              expanded: _groupExpanded,
-                              onExpand: (k, open) => setState(() => _groupExpanded[k] = open),
-                              onChanged: (dim, val) => setState(() => _userChoices[dim] = val),
+                              groups   : _dimensionGroups,
+                              choices  : _userChoices,
+                              expanded : _groupExpanded,
+                              onExpand : (k, open) => setState(() => _groupExpanded[k] = open),
+                              onChanged: (dim, val)   => setState(() => _userChoices[dim] = val),
                             ),
                           ),
                         ),
                         if (!joiner) ...[
-                          _labeledCard('Number of Options:', _optionCountDropdown(fs), fs, textColor),
-                          _labeledCard('Story Length:', _storyLengthDropdown(fs), fs, textColor),
+                          _labeledCard('Minimum Number of Options:', _optionCountDropdown(fs), fs, textColor, textTheme),
+                          _labeledCard('Story Length:', _storyLengthDropdown(fs),      fs, textColor, textTheme),
                           SizedBox(height: fs * 2),
                         ],
                       ],
@@ -307,13 +323,17 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
               ),
             ),
             floatingActionButton: FloatingActionButton.extended(
-              onPressed: joiner ? _submitGroupVote : (widget.isGroup ? _createGroupSession : _startSoloStory),
-              label: Text(
-                widget.isGroup ? (joiner ? 'Submit Votes' : 'Proceed to Lobby') : 'Start Story',
-                style: GoogleFonts.kottaOne(fontSize: fs, fontWeight: FontWeight.bold, color: textColor),
-              ),
+              onPressed: joiner
+                  ? _submitGroupVote
+                  : (widget.isGroup ? _createGroupSession : _startSoloStory),
               backgroundColor: accentColor,
-              foregroundColor: textColor,
+              foregroundColor: colours.onSecondary,
+              label: Text(
+                widget.isGroup
+                    ? (joiner ? 'Submit Votes' : 'Proceed to Lobby')
+                    : 'Start Story',
+                style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         );
@@ -327,33 +347,50 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     value: _optionCnt,
     isExpanded: true,
     onChanged: (v) => setState(() => _optionCnt = v!),
-    items: [2, 3, 4].map((c) => DropdownMenuItem(value: c, child: Text('$c'))).toList(),
+    items: [2, 3, 4]
+        .map((c) => DropdownMenuItem(value: c, child: Text('$c')))
+        .toList(),
   );
 
   Widget _storyLengthDropdown(double fs) => DropdownButtonFormField<String>(
     value: _storyLen,
     isExpanded: true,
     onChanged: (v) => setState(() => _storyLen = v!),
-    items: ['Short', 'Medium', 'Long'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+    items: ['Short', 'Medium', 'Long']
+        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+        .toList(),
   );
 
-  Widget _labeledCard(String label, Widget child, double fs, Color textColor) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 500),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: GoogleFonts.kottaOne(fontSize: fs, fontWeight: FontWeight.bold, color: textColor)),
-              const SizedBox(height: 8),
-              child,
-            ],
+  Widget _labeledCard(
+      String label,
+      Widget child,
+      double fs,
+      Color textColor,
+      TextTheme textTheme,
+      ) =>
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: textTheme.bodyLarge?.copyWith(
+                      fontSize: fs,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  child,
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }

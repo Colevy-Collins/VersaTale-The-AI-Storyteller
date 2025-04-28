@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'action_button.dart';
 
 class FullStoryDialog extends StatefulWidget {
@@ -10,87 +9,76 @@ class FullStoryDialog extends StatefulWidget {
   final bool canPick;
 
   const FullStoryDialog({
-    Key? key,
+    super.key,
     required this.fullStory,
     required this.dialogOptions,
     required this.onOptionSelected,
     required this.onShowOptions,
     required this.canPick,
-  }) : super(key: key);
+  });
 
   @override
   State<FullStoryDialog> createState() => _FullStoryDialogState();
 }
 
 class _FullStoryDialogState extends State<FullStoryDialog> {
-  final ScrollController _ctrl = ScrollController();
+  final _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_ctrl.hasClients) _ctrl.jumpTo(_ctrl.position.maxScrollExtent);
-    });
+    WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scroll.jumpTo(_scroll.position.maxScrollExtent),
+    );
   }
 
   @override
-  Widget build(BuildContext dialogCtx) => Dialog(
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: BorderSide(color: Colors.brown.shade300, width: 2),
-    ),
-    backgroundColor: Colors.brown.shade50.withOpacity(0.9),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Current Story',
-            style: GoogleFonts.kottaOne(
-              fontSize: 24,
-              color: Colors.brown.shade800,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            height: 300,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.brown.shade300),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Scrollbar(
-              controller: _ctrl,
-              child: SingleChildScrollView(
-                controller: _ctrl,
-                padding: const EdgeInsets.all(8),
-                child: Text(
-                  widget.fullStory,
-                  style: GoogleFonts.kottaOne(color: Colors.brown.shade800),
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: cs.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Current Story',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Container(
+              height: 300,
+              decoration: BoxDecoration(
+                border: Border.all(color: cs.outline),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Scrollbar(
+                controller: _scroll,
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.all(8),
+                  child: Text(widget.fullStory, style: tt.bodyLarge),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          if (widget.dialogOptions.isNotEmpty)
-            ActionButton(
-              label: 'Choose Next Action',
-              onPressed: widget.canPick ? widget.onShowOptions : null,
-            ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: Text(
-              'Close',
-              style: GoogleFonts.kottaOne(
-                color: Colors.brown.shade800,
-                fontWeight: FontWeight.w700,
+            const SizedBox(height: 16),
+            if (widget.dialogOptions.isNotEmpty)
+              ActionButton(
+                label: 'Choose Next Action',
+                onPressed: widget.canPick ? widget.onShowOptions : null,
               ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Close',
+                  style:
+                  tt.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

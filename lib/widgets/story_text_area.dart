@@ -1,29 +1,30 @@
-// lib/widgets/story_text_area.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class StoryTextArea extends StatelessWidget {
-  final ScrollController controller;
-  final TextEditingController textController;
-
   const StoryTextArea({
-    Key? key,
+    super.key,
     required this.controller,
     required this.textController,
-  }) : super(key: key);
+  });
+
+  final ScrollController      controller;
+  final TextEditingController textController;
 
   @override
-  Widget build(BuildContext ctx) {
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xF0EDE8), // updated background color
+        color       : cs.surface,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
+        boxShadow   : [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(.10),
             blurRadius: 8,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -33,16 +34,12 @@ class StoryTextArea extends StatelessWidget {
           controller: controller,
           child: TextField(
             controller: textController,
-            maxLines: null,
-            readOnly: true,
+            readOnly  : true,
+            maxLines  : null,
             decoration: const InputDecoration.collapsed(
               hintText: 'Story will appear here…',
             ),
-            style: GoogleFonts.kottaOne(
-              fontSize: 18,
-              height: 1.4,
-              color: const Color(0xFF212121),
-            ),
+            style: tt.bodyLarge?.copyWith(height: 1.4),
           ),
         ),
       ),

@@ -1,116 +1,133 @@
 // lib/screens/multiplayer_host_lobby_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/lobby_host_controller.dart';
 import 'vote_results_screen.dart';
 import '../story_screen.dart';
 import '../dashboard_screen.dart';
-import '../../models/player.dart';
 import '../../utils/ui_utils.dart';
 
 class MultiplayerHostLobbyScreen extends StatelessWidget {
+  const MultiplayerHostLobbyScreen({
+    super.key,
+    required this.sessionId,
+    required this.joinCode,
+    required this.playersMap,
+    this.fromSoloStory = false,
+    this.fromGroupStory = false,
+  });
+
   final String sessionId;
   final String joinCode;
   final Map<int, Map<String, dynamic>> playersMap;
   final bool fromSoloStory;
   final bool fromGroupStory;
 
-  const MultiplayerHostLobbyScreen({
-    Key? key,
-    required this.sessionId,
-    required this.joinCode,
-    required this.playersMap,
-    this.fromSoloStory  = false,
-    this.fromGroupStory = false,
-  }) : super(key: key);
-
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<LobbyHostController>(
       create: (_) => LobbyHostController(
-        sessionId    : sessionId,
+        sessionId: sessionId,
         currentUserId: FirebaseAuth.instance.currentUser!.uid,
         initialPlayers: playersMap,
-        fromSoloStory : fromSoloStory,
+        fromSoloStory: fromSoloStory,
         fromGroupStory: fromGroupStory,
       ),
-      child: _LobbyHostView(joinCode: joinCode),
+      child: _LobbyView(joinCode: joinCode),
     );
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────── */
 
-class _LobbyHostView extends StatelessWidget {
+class _LobbyView extends StatelessWidget {
+  const _LobbyView({required this.joinCode});
+
   final String joinCode;
-  const _LobbyHostView({Key? key, required this.joinCode}) : super(key: key);
+
+  /* ───────── side-effects after state changes ───────── */
+
+  void _handleNavigation(BuildContext ctx, LobbyHostController vm) {
+    if (vm.lastError != null) {
+      showError(ctx, vm.lastError!);
+      vm.clearError();
+    }
+
+    if (vm.isKicked) {
+      Navigator.pushReplacement(
+        ctx,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+      return;
+    }
+
+    if (vm.shouldNavigateToResults && vm.resolvedResults != null) {
+      Navigator.pushReplacement(
+        ctx,
+        MaterialPageRoute(
+          builder: (_) => VoteResultsScreen(
+            resolvedResults: vm.resolvedResults!,
+            sessionId: vm.sessionId,
+            joinCode: joinCode,
+          ),
+        ),
+      );
+      vm.navigationHandled();
+      return;
+    }
+
+    if (vm.shouldNavigateToStory && vm.storyPayload != null) {
+      Navigator.pushReplacement(
+        ctx,
+        MaterialPageRoute(
+          builder: (_) => StoryScreen(
+            sessionId: vm.sessionId,
+            joinCode: joinCode,
+            initialLeg: vm.storyPayload!['initialLeg'],
+            options: List<String>.from(vm.storyPayload!['options'] ?? []),
+            storyTitle: vm.storyPayload!['storyTitle'],
+            inputTokens: vm.storyPayload!['inputTokens'] ?? 0,
+            outputTokens: vm.storyPayload!['outputTokens'] ?? 0,
+            estimatedCostUsd: vm.storyPayload!['estimatedCostUsd'] ?? 0.0,
+          ),
+        ),
+      );
+      vm.navigationHandled();
+    }
+  }
+
+  /* ───────── build ───────── */
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<LobbyHostController>();
 
-    /* ── navigation side-effects after state change ── */
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (vm.lastError != null) {
-        showError(context, vm.lastError!);
-        vm.clearError();
-      }
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
-      if (vm.isKicked) {
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (_) => HomeScreen()));
-      } else if (vm.shouldNavigateToResults &&
-          vm.resolvedResults != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VoteResultsScreen(
-              resolvedResults: vm.resolvedResults!,
-              sessionId      : vm.sessionId,
-              joinCode       : joinCode,
-            ),
-          ),
-        );
-        vm.navigationHandled();
-      } else if (vm.shouldNavigateToStory && vm.storyPayload != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StoryScreen(
-              sessionId : vm.sessionId,
-              joinCode  : joinCode,
-              initialLeg: vm.storyPayload!['initialLeg'],
-              options   : List<String>.from(vm.storyPayload!['options'] ?? []),
-              storyTitle: vm.storyPayload!['storyTitle'],
-              /* ── seed usage counters so badge correct on first frame ── */
-              inputTokens     : vm.storyPayload!['inputTokens']     ?? 0,
-              outputTokens    : vm.storyPayload!['outputTokens']    ?? 0,
-              estimatedCostUsd: vm.storyPayload!['estimatedCostUsd']?? 0.0,
-            ),
-          ),
-        );
-        vm.navigationHandled();
-      }
-    });
+    // Attach navigation listeners.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _handleNavigation(context, vm));
 
-    /* ───────────────────── UI scaffold ───────────────────── */
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        centerTitle: true,
-        title: Text('Host Lobby', style: GoogleFonts.carterOne(color: Colors.black)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Host Lobby',
+          style: tt.titleLarge?.copyWith(color: cs.onBackground),
+        ),
       ),
-      extendBodyBehindAppBar: true,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
-            begin : Alignment.topLeft,
-            end   : Alignment.bottomRight,
+            colors: [cs.primaryContainer, cs.secondaryContainer],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
         ),
         child: SafeArea(
@@ -119,29 +136,33 @@ class _LobbyHostView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                /* ── join code card ── */
+                /* ── Join-code card ── */
                 Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 300),
                     child: Card(
-                      color: Colors.white.withOpacity(0.8),
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      color: cs.surface.withOpacity(.85),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            vertical: 12, horizontal: 16),
+                          vertical: 12,
+                          horizontal: 16,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Join Code:',
-                                style: GoogleFonts.kottaOne(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black)),
+                            Text(
+                              'Join Code:',
+                              style: tt.labelLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             const SizedBox(height: 4),
-                            SelectableText(joinCode,
-                                style: GoogleFonts.kottaOne(
-                                    fontSize: 24, color: Colors.black)),
+                            SelectableText(
+                              joinCode,
+                              style: tt.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -150,42 +171,47 @@ class _LobbyHostView extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                /* ── players list ── */
-                Text('Players in Lobby:',
-                    style: GoogleFonts.kottaOne(
-                        fontWeight: FontWeight.bold, color: Colors.black),
-                    textAlign: TextAlign.center),
+                /* ── Players list ── */
+                Text(
+                  'Players in Lobby:',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 8),
                 Expanded(
                   child: ListView.builder(
                     itemCount: vm.players.length,
                     itemBuilder: (_, i) {
-                      final player = vm.players[i];
+                      final p = vm.players[i];
                       return Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 400),
                           child: Card(
                             margin: const EdgeInsets.symmetric(vertical: 4),
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
                             child: ListTile(
-                              leading: Text('${player.slot}',
-                                  style: GoogleFonts.kottaOne(color: Colors.black)),
-                              title: Text(player.displayName,
-                                  style: GoogleFonts.kottaOne(color: Colors.black)),
+                              leading: Text(
+                                '${p.slot}',
+                                style: tt.titleMedium,
+                              ),
+                              title: Text(
+                                p.displayName,
+                                style: tt.bodyLarge,
+                              ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (player.userId == vm.currentUserId)
+                                  if (p.userId == vm.currentUserId)
                                     IconButton(
-                                        icon : const Icon(Icons.edit, color: Colors.black),
-                                        onPressed: () => _renameMe(context, vm)),
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () => _renameMe(context, vm),
+                                    ),
                                   if (vm.isHost &&
-                                      player.userId != vm.currentUserId)
+                                      p.userId != vm.currentUserId)
                                     IconButton(
-                                        icon : const Icon(Icons.remove_circle, color: Colors.black),
-                                        onPressed: () => _confirmKick(context, player.slot, vm)),
+                                      icon: const Icon(Icons.remove_circle),
+                                      onPressed: () =>
+                                          _kickPlayer(context, p.slot, vm),
+                                    ),
                                 ],
                               ),
                             ),
@@ -195,42 +221,58 @@ class _LobbyHostView extends StatelessWidget {
                     },
                   ),
                 ),
-
                 const SizedBox(height: 16),
-                /* ── quill image ── */
+
+                /* ── Decorative image ── */
                 LayoutBuilder(
-                  builder: (context, constr) {
-                    final sz = constr.maxWidth * 0.2;
+                  builder: (_, c) {
+                    final sz = c.maxWidth * 0.2;
                     return Center(
-                      child: SizedBox(
-                        width : sz,
+                      child: Image.asset(
+                        'assets/quill2.png',
+                        width: sz,
                         height: sz,
-                        child: Image.asset('assets/quill_ink.jpg', fit: BoxFit.contain),
+                        fit: BoxFit.contain,
                       ),
                     );
                   },
                 ),
                 const SizedBox(height: 16),
 
-                /* ── action buttons ── */
+                /* ── Bottom-action buttons ── */
                 if (vm.isHost &&
                     vm.players.length > 1 &&
                     !vm.isResolving &&
                     vm.isNewGame &&
                     !vm.fromSoloStory)
-                  _lobbyButton(vm.startSoloStory, 'Take Everyone to Story'),
-                const SizedBox(height: 16),
+                  _actionButton(
+                    context,
+                    onTap: vm.startSoloStory,
+                    label: 'Take Everyone to Story',
+                  ),
                 if (vm.isHost &&
                     vm.players.length > 1 &&
                     !vm.isResolving &&
                     !vm.isNewGame)
-                  _lobbyButton(vm.startGroupStory, 'Take Everyone to Story'),
-                const SizedBox(height: 16),
+                  _actionButton(
+                    context,
+                    onTap: vm.startGroupStory,
+                    label: 'Take Everyone to Story',
+                  ),
                 if (vm.isHost && vm.fromSoloStory && !vm.isResolving)
-                  _lobbyButton(vm.goToStoryAfterResults, 'Go To Story'),
+                  _actionButton(
+                    context,
+                    onTap: vm.goToStoryAfterResults,
+                    label: 'Go To Story',
+                  ),
                 if (vm.fromGroupStory && !vm.isResolving)
-                  _lobbyButton(vm.goToStoryAfterResults, 'Go To Story'),
-                if (vm.isResolving) const Center(child: CircularProgressIndicator()),
+                  _actionButton(
+                    context,
+                    onTap: vm.goToStoryAfterResults,
+                    label: 'Go To Story',
+                  ),
+                if (vm.isResolving)
+                  const Center(child: CircularProgressIndicator()),
               ],
             ),
           ),
@@ -239,55 +281,74 @@ class _LobbyHostView extends StatelessWidget {
     );
   }
 
-  /* ───────── helpers ───────── */
+  /* ───────── reusable widgets ───────── */
 
-  Widget _lobbyButton(VoidCallback onTap, String label) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 200),
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 2,
-          backgroundColor: Colors.white.withOpacity(0.9),
+  Widget _actionButton(
+      BuildContext ctx, {
+        required VoidCallback onTap,
+        required String label,
+      }) {
+    final cs = Theme.of(ctx).colorScheme;
+    final tt = Theme.of(ctx).textTheme;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 220),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: cs.primary,
+            foregroundColor: cs.onPrimary,
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: onTap,
+          child: Text(
+            label,
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
         ),
-        child: Text(label,
-            style: GoogleFonts.kottaOne(fontWeight: FontWeight.bold, color: Colors.black)),
       ),
-    ),
-  );
+    );
+  }
 
-  Future<void> _confirmKick(
+  /* ───────── rename / kick helpers ───────── */
+
+  Future<void> _kickPlayer(
       BuildContext ctx, int slot, LobbyHostController vm) async {
     final name = vm.players.firstWhere((p) => p.slot == slot).displayName;
-    final kick = await confirmDialog(
+    final ok = await confirmDialog(
       ctx: ctx,
       title: 'Kick Player',
       message: 'Remove $name from lobby?',
     );
-    if (kick == true) {
+    if (ok == true) {
       vm.kickPlayer(slot);
       showSnack(ctx, 'Removed $name');
     }
   }
 
-  Future<void> _renameMe(BuildContext ctx, LobbyHostController vm) async {
+  Future<void> _renameMe(
+      BuildContext ctx, LobbyHostController vm) async {
     String tmp = '';
     final newName = await showDialog<String>(
       context: ctx,
       builder: (_) => AlertDialog(
-        title: Text('Change Your Name',
-            style: GoogleFonts.kottaOne(color: Colors.black)),
+        title: const Text('Change Your Name'),
         content: TextField(
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Enter new display name'),
+          decoration:
+          const InputDecoration(hintText: 'Enter new display name'),
           onChanged: (v) => tmp = v,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Colors.black))),
-          TextButton(onPressed: () => Navigator.pop(ctx, tmp),
-              child: const Text('OK', style: TextStyle(color: Colors.black))),
+          TextButton(
+            onPressed: Navigator.of(ctx).pop,
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, tmp),
+            child: const Text('OK'),
+          ),
         ],
       ),
     );

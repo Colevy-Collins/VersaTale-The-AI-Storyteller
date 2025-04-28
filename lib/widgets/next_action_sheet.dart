@@ -1,61 +1,56 @@
-// lib/widgets/next_action_sheet.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'action_button.dart';
 
 class NextActionSheet extends StatelessWidget {
-  final List<String> options;
-  final bool busy;
-  final VoidCallback onPrevious;
-  final ValueChanged<String> onSelect;
-
   const NextActionSheet({
-    Key? key,
+    super.key,
     required this.options,
     required this.busy,
     required this.onPrevious,
     required this.onSelect,
-  }) : super(key: key);
+  });
+
+  final List<String>         options;
+  final bool                 busy;
+  final VoidCallback         onPrevious;
+  final ValueChanged<String> onSelect;
 
   @override
-  Widget build(BuildContext ctx) {
+  Widget build(BuildContext context) {
     return Container(
-      height: 300,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: ListView(
+      height : 300,
+      padding: const EdgeInsets.all(16),
+      child  : ListView(
         children: [
-          // “Previous Leg” button stays enabled when not busy
+          /// “Previous leg”
           ActionButton(
-            label: 'Previous Leg',
-            busy: busy,
+            label   : 'Previous Leg',
+            busy    : busy,
             onPressed: busy
                 ? null
                 : () {
-              Navigator.pop(ctx);
+              Navigator.pop(context);
               onPrevious();
             },
           ),
           const SizedBox(height: 8),
 
-          // Render each choice, disabling the “The story ends!” option
-          ...options.map((choice) {
-            final isFinal = choice == '1. The story ends';
-
-            return Padding(
+          /// Player choices
+          ...options.map(
+                (choice) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: ActionButton(
-                label: choice,
-                busy: busy,
-                // Disable if busy or if it's the final sentinel
-                onPressed: (busy || isFinal)
+                label   : choice,
+                busy    : busy,
+                onPressed: (busy || choice == '1. The story ends')
                     ? null
                     : () {
-                  Navigator.pop(ctx);
+                  Navigator.pop(context);
                   onSelect(choice);
                 },
               ),
-            );
-          }).toList(),
+            ),
+          ),
         ],
       ),
     );

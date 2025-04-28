@@ -1,11 +1,11 @@
 // lib/screens/story_screen.dart
 // -----------------------------------------------------------------------------
-// Main reading / interaction screen – solo & multiplayer.
-// Displays live token + cost badge and seeds counters on first launch.
+// Main reading / interaction screen (solo + multiplayer).
+// All colours & fonts are pulled from ThemeData so the view adapts to the
+// palette & font chosen in Profile → Theme.
 // -----------------------------------------------------------------------------
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../controllers/story_controller.dart';
@@ -34,17 +34,6 @@ enum _MenuOption {
 }
 
 class StoryScreen extends StatefulWidget {
-  final String initialLeg;
-  final List<String> options;
-  final String storyTitle;
-  final String? sessionId;   // null ⇒ solo
-  final String? joinCode;
-
-  // NEW – seed usage counters so badge isn’t zero on first frame
-  final int    inputTokens;
-  final int    outputTokens;
-  final double estimatedCostUsd;
-
   const StoryScreen({
     super.key,
     required this.initialLeg,
@@ -57,29 +46,34 @@ class StoryScreen extends StatefulWidget {
     this.estimatedCostUsd = 0.0,
   });
 
+  final String initialLeg;
+  final List<String> options;
+  final String storyTitle;
+  final String? sessionId;   // null ⇒ solo
+  final String? joinCode;
+  final int    inputTokens;
+  final int    outputTokens;
+  final double estimatedCostUsd;
+
   @override
   State<StoryScreen> createState() => _StoryScreenState();
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────── */
 
 class _StoryScreenState extends State<StoryScreen> {
-  // business logic controller
   late final StoryController ctrl;
 
-  // UI controllers
   final ScrollController _scrollCtrl = ScrollController();
   late final TextEditingController _txtCtrl;
 
-  // singletons used for menu helpers
-  final _authSvc   = AuthService();
-  final _storySvc  = StoryService();
-  final _lobbySvc  = LobbyRtdbService();
+  final _authSvc  = AuthService();
+  final _storySvc = StoryService();
+  final _lobbySvc = LobbyRtdbService();
 
   @override
   void initState() {
     super.initState();
-
     ctrl = StoryController(
       initialLeg    : widget.initialLeg,
       initialOptions: widget.options,
@@ -89,9 +83,9 @@ class _StoryScreenState extends State<StoryScreen> {
       initialInputTokens     : widget.inputTokens,
       initialOutputTokens    : widget.outputTokens,
       initialEstimatedCostUsd: widget.estimatedCostUsd,
-      onError       : _showError,
-      onInfo        : _showSnack,
-      onKicked      : _handleKick,
+      onError : _showError,
+      onInfo  : _showSnack,
+      onKicked: _handleKick,
     );
 
     _txtCtrl = TextEditingController(text: ctrl.text);
@@ -101,7 +95,7 @@ class _StoryScreenState extends State<StoryScreen> {
         _txtCtrl.text = ctrl.text;
         _scrollCtrl.jumpTo(0);
       }
-      setState(() {}); // refresh for badge / options etc.
+      setState(() {});      // refresh badges / buttons
     });
   }
 
@@ -113,22 +107,24 @@ class _StoryScreenState extends State<StoryScreen> {
     super.dispose();
   }
 
-  /* ───────────────────────── snack / error helpers ───────────────────── */
+  /* ───────── snack / error helpers ───────── */
 
-  void _showSnack(String msg) {
+  void _showSnack(String m) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: GoogleFonts.kottaOne(color: const Color(0xFF212121))),
-        backgroundColor: const Color(0xFF7FBFC5),
+        content: Text(m, style: tt.bodyMedium?.copyWith(color: cs.onPrimary)),
+        backgroundColor: cs.primary,
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
-  void _showError(String msg) => showError(context, msg);
+  void _showError(String m) => showError(context, m);
 
-  /* ───────────────────────── option sheet / previous leg ─────────────── */
+  /* ───────── option sheet + back-one-leg ───────── */
 
-  void _showOptionSheet() {
+  void _optionSheet() {
     final canPick = !ctrl.busy &&
         (ctrl.phase == StoryPhase.story || ctrl.phase == StoryPhase.vote) &&
         ctrl.inLobby == 0;
@@ -137,45 +133,48 @@ class _StoryScreenState extends State<StoryScreen> {
     showModalBottomSheet(
       context: context,
       builder: (_) => NextActionSheet(
-        options: ctrl.options,
-        busy   : ctrl.busy,
-        onPrevious: _confirmAndGoBack,
-        onSelect  : ctrl.chooseNext,
+        options     : ctrl.options,
+        busy        : ctrl.busy,
+        onPrevious  : _confirmBack,
+        onSelect    : ctrl.chooseNext,
       ),
     );
   }
 
-  Future<void> _confirmAndGoBack() async {
+  Future<void> _confirmBack() async {
     final ok = await confirmDialog(
-      ctx: context,
+      ctx  : context,
       title: 'Warning',
-      message: 'If you go back and then pick the same option, the next leg may differ. Continue?',
+      message:
+      'If you go back and then pick the same option, the next leg may differ. Continue?',
     );
     if (ok) await ctrl.backOneLeg();
   }
 
-  /* ───────────────────────── kicked from multiplayer ─────────────────── */
+  /* ───────── kicked from multiplayer ───────── */
 
   Future<void> _handleKick() async {
     if (!mounted) return;
     _showSnack('You were removed from the session.');
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+    Navigator.pushReplacement(
+        context, MaterialPageRoute(builder: (_) => const HomeScreen()));
   }
 
-  /* ───────────────────────── menu helpers ────────────────────────────── */
+  /* ───────── menu helpers ───────── */
 
   Future<void> _showFullStory() async {
     try {
       final res = await _storySvc.getFullStory(
-        sessionId: (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
+        sessionId:
+        (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
       );
       if (!mounted) return;
       showDialog(
         context: context,
         builder: (_) => FullStoryDialog(
-          fullStory      : res['initialLeg'] ?? '',
-          dialogOptions  : List<String>.from(res['options'] ?? []),
-          canPick        : !ctrl.busy &&
+          fullStory     : res['initialLeg'] ?? '',
+          dialogOptions : List<String>.from(res['options'] ?? []),
+          canPick       : !ctrl.busy &&
               (ctrl.phase == StoryPhase.story || ctrl.phase == StoryPhase.vote),
           onOptionSelected: (opt) {
             Navigator.pop(context);
@@ -183,7 +182,7 @@ class _StoryScreenState extends State<StoryScreen> {
           },
           onShowOptions: () {
             Navigator.pop(context);
-            _showOptionSheet();
+            _optionSheet();
           },
         ),
       );
@@ -195,7 +194,8 @@ class _StoryScreenState extends State<StoryScreen> {
   Future<void> _saveStory() async {
     try {
       final r = await _storySvc.saveStory(
-        sessionId: (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
+        sessionId:
+        (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
       );
       _showSnack(r['message'] ?? 'Story saved.');
     } catch (e) {
@@ -203,26 +203,26 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  /* ───────────────────── create / switch to group session ────────────── */
+  /* ───────── convert solo → group or back to lobby ───────── */
 
   Future<void> _createGroupSession() async {
-    setState(() {}); // spin indicator if you add one
+    setState(() {}); // show spinner if you add one later
     try {
       if (!ctrl.isMultiplayer) {
-        final backend = await _storySvc.createMultiplayerSession("false");
+        final backend      = await _storySvc.createMultiplayerSession("false");
         final newSessionId = backend['sessionId'] as String;
         final newJoinCode  = backend['joinCode']  as String;
 
         // seed lobby
         final hostName = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
         await _lobbySvc.createSession(
-          sessionId: newSessionId,
-          hostName : hostName,
+          sessionId     : newSessionId,
+          hostName      : hostName,
           randomDefaults: {},
-          newGame: false,
+          newGame       : false,
         );
 
-        // broadcast current solo story incl. counters
+        // broadcast current solo story (incl. counters)
         await _lobbySvc.advanceToStoryPhase(
           sessionId: newSessionId,
           storyPayload: {
@@ -236,7 +236,7 @@ class _StoryScreenState extends State<StoryScreen> {
         );
 
         final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-        final playersMap = <int, Map<String, dynamic>>{
+        final map = <int, Map<String, dynamic>>{
           1: {'displayName': hostName, 'userId': uid},
         };
 
@@ -253,15 +253,16 @@ class _StoryScreenState extends State<StoryScreen> {
             builder: (_) => MultiplayerHostLobbyScreen(
               sessionId     : newSessionId,
               joinCode      : newJoinCode,
-              playersMap    : playersMap,
+              playersMap    : map,
               fromSoloStory : true,
               fromGroupStory: false,
             ),
           ),
         );
       } else {
-        // already multiplayer – jump back to lobby
-        final playersMap = await _lobbySvc.fetchPlayerList(sessionId: widget.sessionId!);
+        // already MP → go back to lobby
+        final map = await _lobbySvc.fetchPlayerList(
+            sessionId: widget.sessionId!);
         await _lobbySvc.updatePhase(
           sessionId: widget.sessionId!,
           phase    : StoryPhase.lobby.asString,
@@ -274,7 +275,7 @@ class _StoryScreenState extends State<StoryScreen> {
             builder: (_) => MultiplayerHostLobbyScreen(
               sessionId     : widget.sessionId!,
               joinCode      : widget.joinCode!,
-              playersMap    : playersMap,
+              playersMap    : map,
               fromSoloStory : false,
               fromGroupStory: true,
             ),
@@ -288,10 +289,13 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  /* ───────────────────────── build UI ────────────────────────────────── */
+  /* ───────── build ───────── */
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     final canPick = !ctrl.busy &&
         (ctrl.phase == StoryPhase.story || ctrl.phase == StoryPhase.vote) &&
         ctrl.inLobby == 0;
@@ -301,37 +305,44 @@ class _StoryScreenState extends State<StoryScreen> {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: const Color(0xFF7FBFC5).withOpacity(0.5),
+        backgroundColor: cs.primary.withOpacity(.5),
         elevation: 8,
         centerTitle: true,
         title: FittedBox(
           fit: BoxFit.scaleDown,
           child: Column(
             children: [
-              Text(
-                ctrl.title,
-                style: GoogleFonts.kottaOne(
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF212121),
-                ),
-              ),
-              Text(
-                '${ctrl.inputTokens} tok • \$${ctrl.estimatedCostUsd.toStringAsFixed(4)}',
-                style: GoogleFonts.kottaOne(
-                  fontSize: 12,
-                  color: Colors.brown.shade800,
-                ),
-              ),
+              Text(ctrl.title,
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+              Text('${ctrl.inputTokens} tokens • \$'
+                  '${ctrl.estimatedCostUsd.toStringAsFixed(4)}',
+                  style: tt.bodySmall),
             ],
           ),
         ),
         actions: [
           PopupMenuButton<_MenuOption>(
-            icon: Icon(Icons.menu, color: Colors.brown.shade800),
-            onSelected: (choice) async {
-              switch (choice) {
+            icon: Icon(Icons.menu, color: cs.onPrimary),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: _MenuOption.backToScreen,
+                  child: Text('Back to Home')),
+              PopupMenuItem(value: _MenuOption.startGroupStory,
+                  child: Text('Multiplayer Lobby')),
+              PopupMenuItem(value: _MenuOption.viewFullStory,
+                  child: Text('View Full Story')),
+              PopupMenuItem(value: _MenuOption.saveStory,
+                  child: Text('Save Story')),
+              PopupMenuItem(value: _MenuOption.logout,
+                  child: Text('Logout')),
+              PopupMenuItem(value: _MenuOption.closeMenu,
+                  child: Text('Close Menu')),
+            ],
+            onSelected: (ch) async {
+              switch (ch) {
                 case _MenuOption.backToScreen:
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+                  Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HomeScreen()));
                   break;
                 case _MenuOption.startGroupStory:
                   await _createGroupSession();
@@ -345,27 +356,24 @@ class _StoryScreenState extends State<StoryScreen> {
                 case _MenuOption.logout:
                   await _authSvc.signOut();
                   if (!mounted) return;
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainSplashScreen()));
+                  Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const MainSplashScreen()));
                   break;
                 case _MenuOption.closeMenu:
                   break;
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: _MenuOption.backToScreen,   child: Text('Back to Home')),
-              PopupMenuItem(value: _MenuOption.startGroupStory,child: Text('Multiplayer Lobby')),
-              PopupMenuItem(value: _MenuOption.viewFullStory,  child: Text('View Full Story')),
-              PopupMenuItem(value: _MenuOption.saveStory,      child: Text('Save Story')),
-              PopupMenuItem(value: _MenuOption.logout,         child: Text('Logout')),
-              PopupMenuItem(value: _MenuOption.closeMenu,      child: Text('Close Menu')),
-            ],
           ),
         ],
       ),
 
       body: Stack(
         children: [
-          Positioned.fill(child: Image.asset('assets/parchment_updated.png', fit: BoxFit.cover)),
+          Positioned.fill(
+              child: Image.asset('assets/parchment_updated.png',
+                  fit: BoxFit.cover)),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -376,39 +384,42 @@ class _StoryScreenState extends State<StoryScreen> {
                     children: [
                       Expanded(
                         child: StoryTextArea(
-                          controller: _scrollCtrl,
-                          textController: _txtCtrl,
+                          controller     : _scrollCtrl,
+                          textController : _txtCtrl,
                         ),
                       ),
                       const SizedBox(height: 20),
                       ActionButton(
                         label: 'Choose Next Action',
-                        busy: ctrl.busy,
-                        onPressed: canPick ? _showOptionSheet : null,
+                        busy : ctrl.busy,
+                        onPressed: canPick ? _optionSheet : null,
                       ),
-                      if (ctrl.isMultiplayer && ctrl.phase == StoryPhase.vote) ...[
+                      if (ctrl.isMultiplayer &&
+                          ctrl.phase == StoryPhase.vote) ...[
                         const SizedBox(height: 20),
-                        if (ctrl.isHost && !ctrl.busy) ...[
-                          ActionButton(
-                            label: 'Resolve Votes',
-                            busy: ctrl.busy,
-                            onPressed: ctrl.resolveVotesManually,
-                          ),
-                          const SizedBox(height: 10),
-                        ],
+                        if (ctrl.isHost && !ctrl.busy)
+                          ...[
+                            ActionButton(
+                              label: 'Resolve Votes',
+                              busy : ctrl.busy,
+                              onPressed: ctrl.resolveVotesManually,
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                         ctrl.busy
                             ? const CircularProgressIndicator()
                             : Text('Waiting for votes…',
-                            style: GoogleFonts.kottaOne(fontSize: 16),
+                            style: tt.bodyLarge,
                             textAlign: TextAlign.center),
                       ],
                       if (ctrl.isMultiplayer &&
                           ctrl.isHost &&
-                          (ctrl.inLobby > 0 || ctrl.phase == StoryPhase.lobby)) ...[
+                          (ctrl.inLobby > 0 ||
+                              ctrl.phase == StoryPhase.lobby)) ...[
                         const SizedBox(height: 10),
                         ActionButton(
                           label: 'Bring Everyone Back',
-                          busy: ctrl.busy,
+                          busy : ctrl.busy,
                           onPressed: ctrl.hostBringEveryoneBack,
                         ),
                       ],
