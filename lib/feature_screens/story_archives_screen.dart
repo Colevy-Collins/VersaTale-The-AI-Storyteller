@@ -1,11 +1,11 @@
 // lib/screens/story_archives_screen.dart
 // -----------------------------------------------------------------------------
-// Lists saved stories and lets the user View ▸ Download ▸ Delete ▸ Continue.
+// Lists saved stories and lets the user  View ▸ Download ▸ Delete ▸ Continue.
 // Adapts to any ColorScheme; safe on web / desktop / mobile.
 // -----------------------------------------------------------------------------
 
 import 'dart:convert';
-import 'dart:html' as html;                       // download helper (web-only)
+import 'dart:html' as html;                       // download helper (web‑only)
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -70,8 +70,10 @@ class _StoryArchivesScreenState extends State<StoryArchivesScreen> {
         title  : Text(d['storyTitle'] ?? 'Story Details'),
         content: SingleChildScrollView(child: Text(txt)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context),
-              child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
@@ -85,7 +87,7 @@ class _StoryArchivesScreenState extends State<StoryArchivesScreen> {
   }
 
   Future<void> _download(Map s, {String? content}) async {
-    if (!kIsWeb) return;                             // mobile / desktop: no-op
+    if (!kIsWeb) return;                             // mobile / desktop: no‑op
 
     final data  = content ??
         (await _svc.viewStory(storyId: s['story_ID']))['initialLeg'];
@@ -128,10 +130,9 @@ class _StoryArchivesScreenState extends State<StoryArchivesScreen> {
   /*──────────────────────── helpers ────────────────────────*/
 
   Widget _textBtn(IconData icon, String label, VoidCallback onTap) {
-    final cs = Theme.of(context).colorScheme;
     return TextButton.icon(
-      icon : Icon(icon, color: cs.secondary),
-      label: Text(label, style: TextStyle(color: cs.secondary)),
+      icon : Icon(icon),
+      label: Text(label),
       onPressed: onTap,
     );
   }
@@ -178,10 +179,6 @@ class _StoryArchivesScreenState extends State<StoryArchivesScreen> {
                 _textBtn(Icons.download_rounded, 'Download', () => _download(s)),
                 _textBtn(Icons.delete_outline,    'Delete',   () => _delete(s)),
                 ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: cs.secondary,
-                    foregroundColor: cs.onSecondary,
-                  ),
                   icon : const Icon(Icons.play_arrow, size: 18),
                   label: const Text('Continue'),
                   onPressed: () => _cont(s),
@@ -220,31 +217,38 @@ class _StoryArchivesScreenState extends State<StoryArchivesScreen> {
             ? Center(child: Text(_error!, style: tt.bodyLarge))
             : _stories.isEmpty
             ? Center(
-          child: Text('You have no saved stories yet',
-              style: tt.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: cs.outline)),
+          child: Text(
+            'You have no saved stories yet',
+            style: tt.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: cs.outline,
+            ),
+          ),
         )
             : RefreshIndicator(
           onRefresh: _refresh,
           child: LayoutBuilder(
             builder: (ctx, c) {
-              final small = c.maxWidth < 1000 || c.maxHeight < 900;
+              final small =
+                  c.maxWidth < 1000 || c.maxHeight < 900;
 
               // list of cards
               final list = ListView.separated(
-                shrinkWrap: true,                                     // ✨ fix
-                physics: const NeverScrollableScrollPhysics(),        // ✨ fix
+                shrinkWrap: true,
+                physics:
+                const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 itemCount: _stories.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 14),
+                separatorBuilder: (_, __) =>
+                const SizedBox(height: 14),
                 itemBuilder: (_, i) => _card(_stories[i]),
               );
 
               if (small) {
                 // cards first, image underneath
                 return SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
+                  physics:
+                  const AlwaysScrollableScrollPhysics(),
                   child: Column(
                     children: [
                       list,
@@ -256,7 +260,7 @@ class _StoryArchivesScreenState extends State<StoryArchivesScreen> {
                 );
               }
 
-              // large screen layout – cards left, image right
+              // large‑screen layout – cards left, image right
               return Stack(
                 children: [
                   Positioned(
@@ -269,7 +273,8 @@ class _StoryArchivesScreenState extends State<StoryArchivesScreen> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.only(right: 300),
+                    padding:
+                    const EdgeInsets.only(right: 300),
                     child: list,
                   ),
                 ],
