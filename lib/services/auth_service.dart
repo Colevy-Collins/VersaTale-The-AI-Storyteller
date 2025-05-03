@@ -1,6 +1,8 @@
+// lib/services/auth_service.dart
+
 import 'package:firebase_auth/firebase_auth.dart';
 
-/// Carries back both the Firebase [user] (if any) and a human‐readable [message].
+/// Wraps a Firebase User (if any) together with a human‐readable [message].
 class AuthResult {
   final User? user;
   final String message;
@@ -11,37 +13,33 @@ class AuthResult {
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// Maps FirebaseAuthException codes to user‐friendly strings.
+  /// Convert FirebaseAuthException codes into friendly messages.
   String _getFriendlyErrorMessage(FirebaseAuthException e) {
-    print('FirebaseAuthException: ${e.code} - ${e.message}');
     switch (e.code) {
       case 'invalid-email':
         return 'The email address is not valid. Please check and try again.';
       case 'user-disabled':
-        return 'This user has been disabled. Please contact support for assistance.';
+        return 'This user has been disabled. Please contact support.';
       case 'user-not-found':
-        return 'No user found with these credentials. Make sure you have the right email/password.';
+        return 'No account found with those credentials.';
       case 'wrong-password':
-        return 'Incorrect password. Please try again or reset your password.';
+        return 'Incorrect password.';
       case 'email-already-in-use':
-        return 'This email is already registered. Please use a different email, or log in instead.';
+        return 'An account already exists with that email.';
       case 'operation-not-allowed':
-        return 'This account type is not enabled. Please contact support.';
+        return 'This sign-in method is not enabled.';
       case 'weak-password':
-        return 'Your password is too weak. Please choose a stronger password.';
+        return 'The password is too weak.';
       case 'too-many-requests':
-        return 'Too many requests have been made from this device. Please wait and try again later.';
+        return 'Too many attempts. Please wait and try again later.';
       case 'network-request-failed':
-        return 'Network error. Please check your internet connection and try again.';
-      case 'invalid-credential':
-        return 'The provided credential is invalid. Please check and try again.';
+        return 'Network error. Check your connection.';
       default:
-        return 'An unexpected error occurred: ${e.message}';
+        return e.message ?? 'Authentication error. Please try again.';
     }
   }
 
-  /// Central helper that runs any Firebase operation, catches errors,
-  /// and wraps the result in [AuthResult].
+  /// Helper to run a Firebase action, catch errors, and return an AuthResult.
   Future<AuthResult> _execute<T>(
       Future<T> Function() action, {
         required String successMessage,
@@ -49,29 +47,22 @@ class AuthService {
       }) async {
     try {
       final result = await action();
-
-      // Determine which User to return (if any)
       User? user;
       if (result is UserCredential) {
         user = result.user;
       } else if (returnUser) {
         user = _auth.currentUser;
       }
-
       return AuthResult(user: user, message: successMessage);
     } on FirebaseAuthException catch (e) {
-      // Use our friendly mapping
       return AuthResult(user: null, message: _getFriendlyErrorMessage(e));
     } catch (e) {
-      print('Error during auth operation: $e');
       return AuthResult(
-        user: null,
-        message: 'An unexpected error occurred. Please try again.',
-      );
+          user: null, message: 'An unexpected error occurred.');
     }
   }
 
-  /// Create a new user account
+  /// Create a new account.
   Future<AuthResult> signUp(String email, String password) =>
       _execute(
             () => _auth.createUserWithEmailAndPassword(
@@ -82,7 +73,7 @@ class AuthService {
         returnUser: true,
       );
 
-  /// Sign in existing user
+  /// Sign in an existing user.
   Future<AuthResult> signIn(String email, String password) =>
       _execute(
             () => _auth.signInWithEmailAndPassword(
@@ -93,48 +84,89 @@ class AuthService {
         returnUser: true,
       );
 
-  /// Sign out current user
+  /// Sign out.
   Future<void> signOut() async {
     await _auth.signOut();
   }
 
-  /// Get the currently signed in user (if any)
+  /// Get currently signed-in user.
   User? getCurrentUser() => _auth.currentUser;
 
-  /// Fetch a fresh Firebase ID token
+  /// Get fresh ID token.
   Future<String?> getToken() async {
     final user = _auth.currentUser;
     return user != null ? await user.getIdToken() : null;
   }
 
-  /// Send a password reset email
+  /// Send a reset-password email.
   Future<AuthResult> resetPassword(String email) =>
       _execute(
             () => _auth.sendPasswordResetEmail(email: email),
-        successMessage: 'A password reset email has been sent!',
+        successMessage: 'Password reset email sent.',
       );
 
-  /// Update the current user’s password
-  Future<AuthResult> updatePassword(String newPassword) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) {
-      return AuthResult(user: null, message: 'No user is currently signed in.');
+  /// Change password, requiring current password for re-authentication.
+  Future<AuthResult> changePassword(
+      String currentPassword, String newPassword) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return AuthResult(user: null, message: 'No user is signed in.');
     }
+    final email = user.email;
+    if (email == null) {
+      return AuthResult(
+          user: null, message: 'User has no email on record.');
+    }
+
+    // Re-authenticate:
+    try {
+      final cred = EmailAuthProvider.credential(
+        email: email,
+        password: currentPassword,
+      );
+      await user.reauthenticateWithCredential(cred);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password') {
+        return AuthResult(
+          user: null,
+          message: 'Current password is incorrect.',
+        );
+      }
+      return AuthResult(user: null, message: _getFriendlyErrorMessage(e));
+    } catch (_) {
+      return AuthResult(
+          user: null, message: 'An unexpected error occurred.');
+    }
+
+    // If successful, update to the new password:
     return _execute(
-          () => currentUser.updatePassword(newPassword),
-      successMessage: 'Password updated.',
+          () => user.updatePassword(newPassword),
+      successMessage: 'Password updated successfully.',
       returnUser: true,
     );
   }
 
-  /// Delete the current user’s account
-  Future<AuthResult> deleteAccount() async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) {
-      return AuthResult(user: null, message: 'No user is currently signed in.');
+  /// Update password directly (no re-auth).
+  Future<AuthResult> updatePassword(String newPassword) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return AuthResult(user: null, message: 'No user is signed in.');
     }
     return _execute(
-          () => currentUser.delete(),
+          () => user.updatePassword(newPassword),
+      successMessage: 'Password updated successfully.',
+      returnUser: true,
+    );
+  }
+
+  /// Delete the current user's account.
+  Future<AuthResult> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return AuthResult(user: null, message: 'No user is signed in.');
+    }
+    return _execute(
+          () => user.delete(),
       successMessage: 'Account deleted.',
     );
   }

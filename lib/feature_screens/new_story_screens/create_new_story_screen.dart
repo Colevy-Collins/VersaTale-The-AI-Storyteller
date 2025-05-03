@@ -1,7 +1,9 @@
-// lib/screens/create_new_story_screen.dart
+// lib/screens/new_story_screens/create_new_story_screen.dart
 // -----------------------------------------------------------------------------
 // Lets the user (solo or host) pick dimension values and launch a story.
-// Now fully theme-aware: all colours & fonts come from Theme.of(context).
+// Fully responsive down to watch‑sized 240 × 340 displays. Dimensions named in
+// excludedDimensions are **hidden from the UI** yet still get random values
+// when a story starts or a vote is submitted.
 // -----------------------------------------------------------------------------
 
 import 'dart:math';
@@ -19,32 +21,30 @@ import '../mutiplayer_screens/multiplayer_host_lobby_screen.dart';
 
 class CreateNewStoryScreen extends StatefulWidget {
   final bool isGroup;
-
-  /// Filled only when a joiner opened this screen from JoinMultiplayer
-  final String? sessionId;
+  final String? sessionId;                       // join‑flow params
   final String? joinCode;
   final Map<int, Map<String, dynamic>>? initialPlayersMap;
 
   const CreateNewStoryScreen({
-    super.key,
+    Key? key,
     required this.isGroup,
     this.sessionId,
     this.joinCode,
     this.initialPlayersMap,
-  });
+  }) : super(key: key);
 
   @override
   State<CreateNewStoryScreen> createState() => _CreateNewStoryScreenState();
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────────── */
 
 class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
-  // services
+  /* ───────── services ───────── */
   final _storySvc = StoryService();
   final _lobbySvc = LobbyRtdbService();
 
-  // UI state
+  /* ───────── UI state ───────── */
   bool   _loading   = false;
   int    _maxLegs   = 10;
   int    _optionCnt = 2;
@@ -63,21 +63,42 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     }
   }
 
-  /* ─────────────────────────── helpers ───────────────────────────── */
+  /* ───────── helper: groups without excluded dimensions ───────── */
 
-  /// Map<dim, chosenValue> (fills in random defaults)
+  /// Copy of `_dimensionGroups` with every dimension in `excludedDimensions`
+  /// removed.  Groups that become empty are dropped entirely.
+  Map<String, dynamic> _visibleGroups() {
+    final out = <String, Map<String, dynamic>>{};
+
+    _dimensionGroups.forEach((groupName, group) {
+      if (group is Map<String, dynamic>) {
+        final filtered = Map<String, dynamic>.from(group)
+          ..removeWhere((dim, _) => excludedDimensions.contains(dim));
+        if (filtered.isNotEmpty) out[groupName] = filtered;
+      }
+    });
+
+    return out;
+  }
+
+  /* ───────── helper maps ───────── */
+
+  /// Picks a random value for every dimension the user left as “random”.
+  /// (Hidden dimensions are *always* random because the user never sees them.)
   Map<String, String> _randomDefaults() {
     final defs = <String, String>{};
-    _dimensionGroups.forEach((_, g) {
-      if (g is Map<String, dynamic>) {
-        g.forEach((k, v) {
-          if (v is List && !excludedDimensions.contains(k)) {
-            defs[k] = _userChoices[k] ??
-                (List<String>.from(v)..shuffle()).first;
+
+    _dimensionGroups.forEach((_, group) {
+      if (group is Map<String, dynamic>) {
+        group.forEach((dim, values) {
+          if (values is List) {
+            defs[dim] =
+                _userChoices[dim] ?? (List<String>.from(values)..shuffle()).first;
           }
         });
       }
     });
+
     return defs;
   }
 
@@ -90,7 +111,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     return v;
   }
 
-  /* ─────────────────────────── SOLO flow ─────────────────────────── */
+  /* ─────────────── SOLO flow ─────────────── */
 
   Future<void> _startSoloStory() async {
     setState(() => _loading = true);
@@ -110,7 +131,6 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
             initialLeg : res['storyLeg'],
             options    : List<String>.from(res['options'] ?? []),
             storyTitle : res['storyTitle'],
-            // ────── pass usage counters so badge shows immediately ──────
             inputTokens     : res['inputTokens']     ?? 0,
             outputTokens    : res['outputTokens']    ?? 0,
             estimatedCostUsd: res['estimatedCostUsd']?? 0.0,
@@ -118,23 +138,23 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e')),
+      );
     } finally {
       setState(() => _loading = false);
     }
   }
 
-  /* ─────────────────────── GROUP – host create ─────────────────────── */
+  /* ───── GROUP – host create ───── */
 
   Future<void> _createGroupSession() async {
     setState(() => _loading = true);
     try {
-      // 1) fresh session from backend
       final backend   = await _storySvc.createMultiplayerSession("true");
       final sessionId = backend['sessionId'] as String;
       final joinCode  = backend['joinCode']  as String;
 
-      // 2) seed lobby in RTDB
       final hostName = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
       await _lobbySvc.createSession(
         sessionId     : sessionId,
@@ -143,14 +163,12 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         newGame       : true,
       );
 
-      // 3) host + vote
       final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-      final playersMap = <int, Map<String, dynamic>>{
-        1: {'displayName': hostName, 'userId': uid},
-      };
-      await _lobbySvc.submitVote(sessionId: sessionId, vote: _votePayload());
+      await _lobbySvc.submitVote(
+        sessionId: sessionId,
+        vote     : _votePayload(),
+      );
 
-      // 4) route host to lobby
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -158,26 +176,31 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           builder: (_) => MultiplayerHostLobbyScreen(
             sessionId     : sessionId,
             joinCode      : joinCode,
-            playersMap    : playersMap,
+            playersMap    : {1: {'displayName': hostName, 'userId': uid}},
             fromSoloStory : false,
             fromGroupStory: false,
           ),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e')),
+      );
     } finally {
       setState(() => _loading = false);
     }
   }
 
-  /* ─────────────── GROUP – joiner votes then goes to lobby ─────────── */
+  /* ───── GROUP – joiner vote ───── */
 
   Future<void> _submitGroupVote() async {
     if (widget.sessionId == null) return;
     setState(() => _loading = true);
     try {
-      await _lobbySvc.submitVote(sessionId: widget.sessionId!, vote: _votePayload());
+      await _lobbySvc.submitVote(
+        sessionId: widget.sessionId!,
+        vote     : _votePayload(),
+      );
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -204,9 +227,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Pull colours & fonts from the active theme
-    final colours   = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final colours = Theme.of(context).colorScheme;
+    final tt      = Theme.of(context).textTheme;
 
     final cardColor   = colours.surface;
     final accentColor = colours.secondary;
@@ -217,28 +239,36 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width     = constraints.maxWidth;
-        final fs        = (width * 0.03).clamp(14.0, 20.0);
-        final paddedW   = width - 32;
-        final cardMaxW  = paddedW < 500.0 ? paddedW : 500.0;
-        final bgImgW    = cardMaxW + 200.0;
+        final double width  = constraints.maxWidth;
+
+        final bool   tinyScreen = width < 320;
+        final double fs = tinyScreen
+            ? max(width * 0.04, 10)
+            : (width * 0.03).clamp(14.0, 20.0);
+
+        final double paddedW  = width - 32;
+        final double cardMaxW = min(paddedW, 500.0);
+        final double bgImgW   = cardMaxW + 200.0;
 
         final screenTheme = Theme.of(context).copyWith(
           canvasColor: cardColor,
           cardTheme: CardTheme(
-            color: cardColor,
+            color  : cardColor,
             shadowColor: shadowColor,
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation  : 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
             fillColor: cardColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(8)),
-          ),
-          dropdownMenuTheme: DropdownMenuThemeData(
-            menuStyle: MenuStyle(backgroundColor: MaterialStateProperty.all(cardColor)),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 8),
+            border: OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
 
@@ -250,70 +280,100 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
               child: _loading
                   ? Center(
                 child: SizedBox(
-                  width: 48,
+                  width : 48,
                   height: 48,
-                  child: CircularProgressIndicator(
+                  child : CircularProgressIndicator(
                     strokeWidth: 6,
                     color: accentColor,
                   ),
                 ),
               )
                   : Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  // parchment image
-                  Center(
-                    child: Opacity(
-                      opacity: 0.6,
-                      child: Image.asset(
-                        'assets/best_scroll.jpg',
-                        width: bgImgW,
-                        fit: BoxFit.cover,
+                  // parchment background (ignores touches)
+                  IgnorePointer(
+                    child: Center(
+                      child: Opacity(
+                        opacity: 0.6,
+                        child : Image.asset(
+                          'assets/best_scroll.jpg',
+                          width: bgImgW,
+                          fit  : BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),
+
                   // main content
                   SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                    primary : true,
+                    physics : const AlwaysScrollableScrollPhysics(),
+                    padding : const EdgeInsets.all(16),
+                    child   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        /* ───── back button ───── */
                         Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.arrow_back),
+                              icon : const Icon(Icons.arrow_back),
                               color: textColor,
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
                         ),
                         SizedBox(height: fs * 1.5),
+
+                        /* ───── title ───── */
                         Text(
                           widget.isGroup
-                              ? (joiner ? 'Vote on Story Settings' : 'Configure Group Story')
+                              ? (joiner
+                              ? 'Vote on Story Settings'
+                              : 'Configure Group Story')
                               : 'Create Your New Adventure',
                           textAlign: TextAlign.center,
-                          style: textTheme.headlineSmall?.copyWith(
+                          style: tt.headlineSmall?.copyWith(
                             fontSize: fs + 8,
                             fontWeight: FontWeight.bold,
                             color: textColor,
                           ),
                         ),
                         SizedBox(height: fs * 1.5),
+
+                        /* ───── dimension picker ───── */
                         Center(
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 450),
+                            constraints:
+                            BoxConstraints(maxWidth: cardMaxW),
                             child: DimensionPicker(
-                              groups   : _dimensionGroups,
+                              groups   : _visibleGroups(),  // <── filtered
                               choices  : _userChoices,
                               expanded : _groupExpanded,
-                              onExpand : (k, open) => setState(() => _groupExpanded[k] = open),
-                              onChanged: (dim, val)   => setState(() => _userChoices[dim] = val),
+                              onExpand : (k, open) =>
+                                  setState(() => _groupExpanded[k] = open),
+                              onChanged: (dim, val) =>
+                                  setState(() => _userChoices[dim] = val),
                             ),
                           ),
                         ),
+
+                        /* ───── additional settings (solo / host) ───── */
                         if (!joiner) ...[
-                          _labeledCard('Minimum Number of Options:', _optionCountDropdown(fs), fs, textColor, textTheme),
-                          _labeledCard('Story Length:', _storyLengthDropdown(fs),      fs, textColor, textTheme),
+                          _labeledCard(
+                            'Minimum Number of Options:',
+                            _optionCountDropdown(fs),
+                            fs,
+                            textColor,
+                            tt,
+                          ),
+                          _labeledCard(
+                            'Story Length:',
+                            _storyLengthDropdown(fs),
+                            fs,
+                            textColor,
+                            tt,
+                          ),
                           SizedBox(height: fs * 2),
                         ],
                       ],
@@ -322,17 +382,23 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                 ],
               ),
             ),
+
+            /* ───────── FAB ───────── */
             floatingActionButton: FloatingActionButton.extended(
-              onPressed: joiner
-                  ? _submitGroupVote
-                  : (widget.isGroup ? _createGroupSession : _startSoloStory),
               backgroundColor: accentColor,
               foregroundColor: colours.onSecondary,
+              onPressed: joiner
+                  ? _submitGroupVote
+                  : (widget.isGroup
+                  ? _createGroupSession
+                  : _startSoloStory),
               label: Text(
                 widget.isGroup
-                    ? (joiner ? 'Submit Votes' : 'Proceed to Lobby')
-                    : 'Start Story',
-                style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ? (joiner
+                    ? (tinyScreen ? 'Vote'  : 'Submit Votes')
+                    : (tinyScreen ? 'Lobby' : 'Proceed to Lobby'))
+                    : (tinyScreen ? 'Start' : 'Start Story'),
+                style: tt.labelLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -341,13 +407,13 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     );
   }
 
-  /* ─────────────────── UI helper widgets ─────────────────────────── */
+  /* ───────── helper widgets ───────── */
 
   Widget _optionCountDropdown(double fs) => DropdownButtonFormField<int>(
     value: _optionCnt,
     isExpanded: true,
-    onChanged: (v) => setState(() => _optionCnt = v!),
-    items: [2, 3, 4]
+    onChanged : (v) => setState(() => _optionCnt = v!),
+    items     : [2, 3, 4]
         .map((c) => DropdownMenuItem(value: c, child: Text('$c')))
         .toList(),
   );
@@ -355,8 +421,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   Widget _storyLengthDropdown(double fs) => DropdownButtonFormField<String>(
     value: _storyLen,
     isExpanded: true,
-    onChanged: (v) => setState(() => _storyLen = v!),
-    items: ['Short', 'Medium', 'Long']
+    onChanged : (v) => setState(() => _storyLen = v!),
+    items     : ['Short', 'Medium', 'Long']
         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
         .toList(),
   );
@@ -366,7 +432,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       Widget child,
       double fs,
       Color textColor,
-      TextTheme textTheme,
+      TextTheme tt,
       ) =>
       Center(
         child: ConstrainedBox(
@@ -379,7 +445,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                 children: [
                   Text(
                     label,
-                    style: textTheme.bodyLarge?.copyWith(
+                    style: tt.bodyLarge?.copyWith(
                       fontSize: fs,
                       fontWeight: FontWeight.bold,
                       color: textColor,

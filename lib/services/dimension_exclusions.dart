@@ -6,7 +6,6 @@ const List<String> excludedDimensions = [
   "Fail States",
   "Puzzle & Final Challenge",
   "Final Objective",
-  "Protagonist Customization",
   "Moral Dilemmas",
   "Consequences of Failure"
 ];

@@ -1,5 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+Future<void> openTutorialPdf(BuildContext context) async {
+  final uri = Uri.parse(
+    'https://drive.google.com/file/d/1uuDpQgOMNE-SEmvWfmKA36rhoLYsXcSW/preview',
+  );
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Opening tutorial...')),
+  );
+
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(
+      uri,
+      webOnlyWindowName: '_blank', // open in a new browser tab
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open tutorial PDF.')),
+    );
+  }
+}
+
 
 /// Blue (info) snackbar
 void showSnack(BuildContext ctx, String msg) =>
@@ -36,3 +59,5 @@ Future<bool> confirmDialog({
       ),
     )) ??
         false;
+
+

@@ -144,6 +144,11 @@ class HomeScreen extends StatelessWidget {
                           label: 'Join a Friend',
                           onPressed: () => _toJoin(context),
                           fontSize: btnSize),
+                      // New Tutorial button
+                      _DashboardButton(
+                          label: 'Tutorial',
+                          onPressed: () => openTutorialPdf(context),
+                          fontSize: btnSize),
                     ],
                   ),
                   const SizedBox(height: 80),
@@ -225,6 +230,7 @@ class _DashboardButton extends StatelessWidget {
       ),
       onPressed: onPressed,
       child: Text(label,
+          textAlign: TextAlign.center,
           style: tt.labelLarge?.copyWith(
               fontSize: fontSize, fontWeight: FontWeight.bold)),
     );
@@ -247,13 +253,22 @@ class StoryOptionsDialog extends StatefulWidget {
 class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
   bool _group = false;
 
+  bool get _isTiny {
+    final w = MediaQuery.of(context).size.width;
+    return w < 320; // treat sub‑320 px screens as tiny (e.g. 240 × 340)
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
+    TextStyle? labelStyle(double fallback) =>
+        tt.labelLarge?.copyWith(fontSize: _isTiny ? fallback : null);
+
     Widget tile(String title, bool value) => ListTile(
-      title: Text(title, style: tt.bodyLarge),
+      title: Text(title, style: tt.bodyLarge?.copyWith(
+          fontSize: _isTiny ? 14 : null)),
       leading: Radio<bool>(
         value: value,
         groupValue: _group,
@@ -261,37 +276,56 @@ class _StoryOptionsDialogState extends State<StoryOptionsDialog> {
       ),
     );
 
+    final cancelBtn = TextButton(
+      onPressed: Navigator.of(context).pop,
+      child: Text('Cancel', style: labelStyle(12)),
+    );
+
+    ElevatedButton actionBtn(String text, VoidCallback onTap, Color bg, Color fg) =>
+        ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+              backgroundColor: bg,
+              foregroundColor: fg,
+              minimumSize: _isTiny ? const Size.fromHeight(40) : null),
+          child: Text(text, textAlign: TextAlign.center, style: labelStyle(12)),
+        );
+
+    final startBtn = actionBtn('Start Story', () => widget.onStartStory(_group),
+        cs.primary, cs.onPrimary);
+    final contBtn = actionBtn('Continue Story', () => widget.onContinueStory(_group),
+        cs.secondary, cs.onSecondary);
+
+    // On very small screens stack buttons vertically to avoid squeezing text
+    final List<Widget> actions = _isTiny
+        ? [
+      cancelBtn,
+      const SizedBox(height: 8),
+      startBtn,
+      const SizedBox(height: 8),
+      contBtn,
+    ]
+        : [cancelBtn, startBtn, contBtn];
+
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16),
       title: Text('Story Options',
-          style:
-          tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          tile('Solo Story', false),
-          tile('Group Story', true),
-        ],
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            tile('Solo Story', false),
+            tile('Group Story', true),
+          ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: Navigator.of(context).pop,
-          child: Text('Cancel', style: tt.labelLarge),
-        ),
-        ElevatedButton(
-          onPressed: () => widget.onStartStory(_group),
-          style: ElevatedButton.styleFrom(
-              backgroundColor: cs.primary,
-              foregroundColor: cs.onPrimary),
-          child: Text('Start Story', style: tt.labelLarge),
-        ),
-        ElevatedButton(
-          onPressed: () => widget.onContinueStory(_group),
-          style: ElevatedButton.styleFrom(
-              backgroundColor: cs.secondary,
-              foregroundColor: cs.onSecondary),
-          child: Text('Continue Story', style: tt.labelLarge),
-        ),
-      ],
+      actionsAlignment:
+      _isTiny ? MainAxisAlignment.center : MainAxisAlignment.end,
+      actionsPadding: _isTiny
+          ? const EdgeInsets.symmetric(horizontal: 0, vertical: 8)
+          : const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      actions: _isTiny ? [Column(children: actions)] : actions,
     );
   }
 }
