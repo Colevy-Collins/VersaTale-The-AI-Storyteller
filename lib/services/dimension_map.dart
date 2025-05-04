@@ -210,6 +210,16 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "Critical moments turning into permanent setbacks—once a wrong choice is made, the story edges closer to an inevitable bleak end.",
       "Emotional fallout from poor decisions causing alliances to fracture, leaving the hero alone in a final stand they cannot win.",
       "An overarching doom mechanic: each bad call elevates the threat or shortens the timeline, hastening a cataclysmic ending."
-    ]
+    ],
+    "Minimum Number of Options" : [
+      "2",
+      "3",
+      "4",
+    ],
+    "Story Length": [
+      "Short",
+      "Medium",
+      "Long",
+    ],
   }
 };

@@ -103,9 +103,6 @@ class _VoteResultsScreenState extends State<VoteResultsScreen> {
       final res = await _storySvc.startStory(
         decision: 'Start Story',
         dimensionData: widget.resolvedResults,
-        maxLegs: 10,
-        optionCount: 2,
-        storyLength: 'Short',
       );
 
       await _lobbySvc.advanceToStoryPhase(

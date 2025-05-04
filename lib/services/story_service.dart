@@ -19,7 +19,7 @@ class ApiException implements Exception {
 }
 
 class StoryService {
-  final String backendUrl = "http://localhost:8080";//'https://cloud-run-backend-706116508486.us-central1.run.app';
+  final String backendUrl =  'https://cloud-run-backend-706116508486.us-central1.run.app'; //"http://localhost:8080";
   final AuthService authService = AuthService();
 
   // ──────────────────────────────────────────────────────────────
@@ -189,9 +189,6 @@ class StoryService {
   Future<Map<String, dynamic>> startStory({
     required String decision,
     required Map<String, dynamic> dimensionData,
-    required int maxLegs,
-    required int optionCount,
-    required String storyLength,
   }) async {
     final d = await _request(
       method: 'POST',
@@ -199,9 +196,6 @@ class StoryService {
       body  : {
         'decision'   : decision,
         'dimensions' : dimensionData,
-        'maxLegs'    : maxLegs,
-        'optionCount': optionCount,
-        'storyLength': storyLength,
       },
     );
     return _storySlice(d, nested: true);
@@ -321,15 +315,9 @@ class StoryService {
 
   Future<Map<String, dynamic>> startStoryForMultiplayer({
     required Map<String, dynamic> resolvedDimensions,
-    required int maxLegs,
-    required int optionCount,
-    required String storyLength,
   }) =>
       startStory(
         decision     : 'Start Story',
         dimensionData: resolvedDimensions,
-        maxLegs      : maxLegs,
-        optionCount  : optionCount,
-        storyLength  : storyLength,
       );
 }

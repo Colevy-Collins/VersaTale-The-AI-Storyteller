@@ -1,9 +1,15 @@
-// lib/screens/new_story_screens/create_new_story_screen.dart
 // -----------------------------------------------------------------------------
 // Lets the user (solo or host) pick dimension values and launch a story.
-// Fully responsive down to watch‑sized 240 × 340 displays. Dimensions named in
-// excludedDimensions are **hidden from the UI** yet still get random values
-// when a story starts or a vote is submitted.
+// Fully responsive down to watch‑sized 240 × 340 displays.
+//
+// • Dimensions listed in `dimension_exclusions.dart` are always hidden.
+// • When the player is a **joiner** (has a sessionId) we also hide any
+//   dimension in `joiner_dimension_exclusions.dart`, so only the host
+//   can set them.
+//
+// • “Minimum Number of Options” and “Story Length” no longer receive a
+//   random value – they fall back to fixed defaults (2 / Short) unless
+//   the host explicitly changes them.
 // -----------------------------------------------------------------------------
 
 import 'dart:math';
@@ -11,8 +17,9 @@ import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../services/dimension_map.dart';        // groupedDimensionOptions
-import '../../services/dimension_exclusions.dart'; // excludedDimensions
+import '../../services/dimension_map.dart';           // groupedDimensionOptions
+import '../../services/dimension_exclusions.dart';    // excludedDimensions
+import '../../services/joiner_dimension_exclusions.dart' as joiner_excl;                                   // joinerExcludedDimensions
 import '../../widgets/dimension_picker.dart';
 import '../../services/story_service.dart';
 import '../../services/lobby_rtdb_service.dart';
@@ -47,12 +54,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
   /* ───────── UI state ───────── */
   bool   _loading   = false;
-  int    _maxLegs   = 10;
-  int    _optionCnt = 2;
-  String _storyLen  = 'Short';
 
   late final Map<String, dynamic> _dimensionGroups;
-  final Map<String, String?> _userChoices   = {}; // null ⇒ random
+  final Map<String, String?> _userChoices   = {}; // null ⇒ random / default
   final Map<String, bool>    _groupExpanded = {};
 
   @override
@@ -66,23 +70,25 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
 
   /* ───────── helper: groups without excluded dimensions ───────── */
 
-  /// Copy of `_dimensionGroups` with every dimension in `excludedDimensions`
-  /// removed.  Groups that become empty are dropped entirely.
-  Map<String, dynamic> _visibleGroups() {
+  /// Copy of `_dimensionGroups` with every dimension in the current
+  /// exclusion list removed.  Groups that become empty are dropped.
+  Map<String, dynamic> _visibleGroups(bool forJoiner) {
+    final List<String> blacklist = forJoiner
+        ? joiner_excl.joinerExcludedDimensions
+        : excludedDimensions;
+
     // Recursive helper to filter a map at all levels
     Map<String, dynamic> _filterMap(Map<String, dynamic> map) {
       // 1) remove excluded keys at this level
       final filtered = Map<String, dynamic>.from(map)
-        ..removeWhere((key, _) => excludedDimensions.contains(key));
+        ..removeWhere((key, _) => blacklist.contains(key));
 
-      // 2) for each entry, if it’s a map, recurse; otherwise keep as-is
+      // 2) for each entry, if it’s a map, recurse; otherwise keep as‑is
       final result = <String, dynamic>{};
       filtered.forEach((key, value) {
         if (value is Map<String, dynamic>) {
           final nested = _filterMap(value);
-          if (nested.isNotEmpty) {
-            result[key] = nested;
-          }
+          if (nested.isNotEmpty) result[key] = nested;
         } else {
           result[key] = value;
         }
@@ -104,14 +110,19 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   }
 
   /* ───────── helper maps ───────── */
-  /// Flattens an arbitrarily nested map into path → List<String>  where each
-  /// path ends at a leaf list or scalar.  Path segments are joined with dots.
-  Map<String, List<String>> _flattenLeaves(dynamic node, [String prefix = '']) {
+  /// Flattens an arbitrarily nested map into path → List<String>
+  /// where each path ends at a leaf list or scalar.
+  /// Path segments are joined with dots.
+  Map<String, List<String>> _flattenLeaves(dynamic node,
+      [String prefix = '']) {
     final out = <String, List<String>>{};
 
     void recurse(dynamic n, String path) {
       if (n is Map<String, dynamic>) {
-        n.forEach((k, v) => recurse(v, path.isEmpty ? k : '$path.$k'));
+        n.forEach((k, v) => recurse(
+          v,
+          path.isEmpty ? k : '$path.$k',
+        ));
       } else if (n is Iterable) {
         out[path] = n.map((e) => e.toString()).toList();
       } else {
@@ -123,8 +134,10 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     return out;
   }
 
-
-  /// Picks a random value for every leaf dimension the user left as “random”.
+  /// Picks a value for every leaf dimension the user left blank.
+  /// * For most dimensions the value is random.
+  /// * “Minimum Number of Options” defaults to **2**.
+  /// * “Story Length” defaults to **Short**.
   /// Keys in the returned map are **leaf names only**.
   Map<String, String> _randomDefaults() {
     final rand     = Random();
@@ -134,15 +147,19 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
     final leaves = _flattenLeaves(_dimensionGroups);
 
     leaves.forEach((path, options) {
-      final leafKey = path.split('.').last;     // keep only the tail
-      defaults[leafKey] =
-          _userChoices[leafKey] ?? options[rand.nextInt(options.length)];
+      final leafKey = path.split('.').last; // keep only the tail
+      if (leafKey == 'Minimum Number of Options') {
+        defaults[leafKey] = _userChoices[leafKey] ?? '2';
+      } else if (leafKey == 'Story Length') {
+        defaults[leafKey] = _userChoices[leafKey] ?? 'Short';
+      } else {
+        defaults[leafKey] = _userChoices[leafKey] ??
+            options[rand.nextInt(options.length)];
+      }
     });
 
     return defaults;
   }
-
-
 
   /// Only the dimensions explicitly picked by the user (for votes)
   Map<String, String> _votePayload() {
@@ -161,9 +178,6 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       final res = await _storySvc.startStory(
         decision     : 'Start Story',
         dimensionData: _randomDefaults(),
-        maxLegs      : _maxLegs,
-        optionCount  : _optionCnt,
-        storyLength  : _storyLen,
       );
       if (!mounted) return;
       Navigator.push(
@@ -243,8 +257,9 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         sessionId: widget.sessionId!,
         vote     : _votePayload(),
       );
-      
-      await _lobbySvc.updatePhase(sessionId: widget.sessionId!, phase: StoryPhase.lobby.asString);
+
+      await _lobbySvc.updatePhase(
+          sessionId: widget.sessionId!, phase: StoryPhase.lobby.asString);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -391,35 +406,18 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
                             constraints:
                             BoxConstraints(maxWidth: cardMaxW),
                             child: DimensionPicker(
-                              groups   : _visibleGroups(),  // <── filtered
+                              groups   : _visibleGroups(joiner),
                               choices  : _userChoices,
                               expanded : _groupExpanded,
                               onExpand : (k, open) =>
-                                  setState(() => _groupExpanded[k] = open),
+                                  setState(() =>
+                                  _groupExpanded[k] = open),
                               onChanged: (dim, val) =>
-                                  setState(() => _userChoices[dim] = val),
+                                  setState(() =>
+                                  _userChoices[dim] = val),
                             ),
                           ),
                         ),
-
-                        /* ───── additional settings (solo / host) ───── */
-                        if (!joiner) ...[
-                          _labeledCard(
-                            'Minimum Number of Options:',
-                            _optionCountDropdown(fs),
-                            fs,
-                            textColor,
-                            tt,
-                          ),
-                          _labeledCard(
-                            'Story Length:',
-                            _storyLengthDropdown(fs),
-                            fs,
-                            textColor,
-                            tt,
-                          ),
-                          SizedBox(height: fs * 2),
-                        ],
                       ],
                     ),
                   ),
@@ -450,57 +448,4 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
       },
     );
   }
-
-  /* ───────── helper widgets ───────── */
-
-  Widget _optionCountDropdown(double fs) => DropdownButtonFormField<int>(
-    value: _optionCnt,
-    isExpanded: true,
-    onChanged : (v) => setState(() => _optionCnt = v!),
-    items     : [2, 3, 4]
-        .map((c) => DropdownMenuItem(value: c, child: Text('$c')))
-        .toList(),
-  );
-
-  Widget _storyLengthDropdown(double fs) => DropdownButtonFormField<String>(
-    value: _storyLen,
-    isExpanded: true,
-    onChanged : (v) => setState(() => _storyLen = v!),
-    items     : ['Short', 'Medium', 'Long']
-        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-        .toList(),
-  );
-
-  Widget _labeledCard(
-      String label,
-      Widget child,
-      double fs,
-      Color textColor,
-      TextTheme tt,
-      ) =>
-      Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: tt.bodyLarge?.copyWith(
-                      fontSize: fs,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  child,
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
 }
