@@ -16,6 +16,7 @@ import '../../services/dimension_exclusions.dart'; // excludedDimensions
 import '../../widgets/dimension_picker.dart';
 import '../../services/story_service.dart';
 import '../../services/lobby_rtdb_service.dart';
+import '../../models/story_phase.dart';
 import '../story_screen.dart';
 import '../mutiplayer_screens/multiplayer_host_lobby_screen.dart';
 
@@ -201,6 +202,8 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
         sessionId: widget.sessionId!,
         vote     : _votePayload(),
       );
+      
+      await _lobbySvc.updatePhase(sessionId: widget.sessionId!, phase: StoryPhase.lobby.asString);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,

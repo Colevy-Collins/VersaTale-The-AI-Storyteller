@@ -19,8 +19,7 @@ class ApiException implements Exception {
 }
 
 class StoryService {
-  // TODO: swap in your Cloud Run URL when deploying
-  final String backendUrl = 'http://localhost:8080';
+  final String backendUrl = 'https://cloud-run-backend-706116508486.us-central1.run.app';
   final AuthService authService = AuthService();
 
   // ──────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 // lib/screens/story_archives_screen.dart
 // -----------------------------------------------------------------------------
 // Lists saved stories and lets the user  View ▸ Download ▸ Delete ▸ Continue.
-// Dialogs scale smoothly from tiny wear‑OS screens (240 × 340) up to desktop.
+// Dialogs scale smoothly from tiny wear‑OS screens (240×340) up to desktop.
 // -----------------------------------------------------------------------------
 
 import 'dart:convert';

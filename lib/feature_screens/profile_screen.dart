@@ -3,7 +3,7 @@
 // Responsive profile screen:
 //  • Tiny devices (~240×340) → stacked layout, dialogs edge‑to‑edge.
 //  • Phones → normal Material layout.
-//  • Tablets/desktop → centered, max 600 px wide.
+//  • Tablets/desktop → centered, max 600px wide.
 // 2025‑05‑03
 // -----------------------------------------------------------------------------
 

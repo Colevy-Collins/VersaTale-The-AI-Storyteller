@@ -1,14 +1,14 @@
+// lib/feature_screens/login_screens/main_splash_screen.dart
 import 'dart:math';
-import 'dart:html' as html;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/force_update_web.dart';   // ← new (lives in lib/utils)
 import 'login_page.dart';
 import 'register_screen.dart';
-import '../../utils/ui_utils.dart';
+import '../../utils/ui_utils.dart';          // openTutorialPdf()
 
-/// Splash / landing page that forces a check for a newer build,
-/// and reloads the tab exactly once when the service-worker updates.
 class MainSplashScreen extends StatefulWidget {
   const MainSplashScreen({Key? key}) : super(key: key);
 
@@ -17,162 +17,147 @@ class MainSplashScreen extends StatefulWidget {
 }
 
 class _MainSplashScreenState extends State<MainSplashScreen> {
-  bool _hasReloaded = false;
-
   @override
   void initState() {
     super.initState();
-    if (kIsWeb) _checkForNewBuild();
-  }
-
-  Future<void> _checkForNewBuild() async {
-    // 1️⃣ Grab the ServiceWorkerContainer; bail if unsupported
-    final swContainer = html.window.navigator.serviceWorker;
-    if (swContainer == null) return;
-
-    // 2️⃣ Get the current registration (null on very first visit)
-    final reg = await swContainer.getRegistration();
-    if (reg == null) return;
-
-    // 3️⃣ Force an immediate network update check
-    await reg.update();
-
-    // 4️⃣ Listen for the 'updatefound' event on the registration
-    reg.addEventListener('updatefound', (html.Event _) {
-      final sw = reg.installing;
-      if (sw == null) return;
-
-      // 5️⃣ When the new worker reaches 'installed' and an old one controls the page,
-      //    send it SKIP_WAITING so it activates immediately.
-      sw.addEventListener('statechange', (html.Event __) {
-        final installed = sw.state == 'installed';
-        final hasOldController = html.window.navigator.serviceWorker?.controller != null;
-        if (installed && hasOldController) {
-          sw.postMessage({'type': 'SKIP_WAITING'});
-        }
-      });
-    });
-
-    // 6️⃣ When the new worker takes control, reload the page exactly once
-    swContainer.addEventListener('controllerchange', (html.Event _) {
-      if (_hasReloaded) return;
-      _hasReloaded = true;
-      html.window.location.reload();
-    });
+    // Forces a single hard‑refresh if a newer build is available (web only).
+    ForceUpdateWeb.runOnce();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.asset(
-                'assets/versatale_home_image.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-            LayoutBuilder(builder: (context, constraints) {
-              final buttonWidth = constraints.maxWidth * 0.6;
-              final fontSize = min(constraints.maxWidth * 0.05, 28.0);
-              return Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 40),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: buttonWidth,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black.withOpacity(0.2),
-                            elevation: 8,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const LoginPage()),
-                          ),
-                          child: Text(
-                            'Login',
-                            style: TextStyle(
-                              fontSize: fontSize,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: buttonWidth,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black.withOpacity(0.2),
-                            elevation: 8,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                          ),
-                          child: Text(
-                            "Don't have an account? Sign Up",
-                            style: TextStyle(
-                              fontSize: fontSize,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Container(
-                        height: 1,
-                        width: buttonWidth * 0.8,
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: constraints.maxWidth * 0.5,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.2),
-                            elevation: 6,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () => openTutorialPdf(context),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.menu_book,
-                                  color: Colors.white, size: fontSize * 0.8),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Tutorial',
-                                style: TextStyle(
-                                  fontSize: fontSize * 0.8,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final w         = c.maxWidth;
+            final h         = c.maxHeight;
+            final btnWidth  = w * 0.7;                 // responsive button size
+            final fontLarge = min(w * 0.06, 28.0);
+            final fontSmall = fontLarge * 0.85;
+
+            return Stack(
+              children: [
+                // Background image
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/versatale_home_image.png',
+                    fit: BoxFit.cover,
                   ),
                 ),
-              );
-            }),
+
+                // Buttons – kept at the bottom and centered
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                        bottom: h < 400 ? 16 : 40, left: 12, right: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _primaryButton(
+                          label: 'Log In',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const LoginPage()),
+                          ),
+                          width: btnWidth,
+                          fontSize: fontLarge,
+                        ),
+                        const SizedBox(height: 18),
+                        _primaryButton(
+                          label: 'Don\'t have an account? Sign Up',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const RegisterScreen()),
+                          ),
+                          width: btnWidth,
+                          fontSize: fontSmall,
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          height: 1,
+                          width: btnWidth * 0.8,
+                          color: Colors.white.withOpacity(0.35),
+                        ),
+                        const SizedBox(height: 12),
+                        _secondaryButton(
+                          label: 'Tutorial',
+                          icon: Icons.menu_book,
+                          onTap: () => openTutorialPdf(context),
+                          width: btnWidth * 0.8,
+                          fontSize: fontSmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI helpers
+  // ---------------------------------------------------------------------------
+
+  Widget _primaryButton({
+    required String label,
+    required VoidCallback onTap,
+    required double width,
+    required double fontSize,
+  }) {
+    return SizedBox(
+      width: width,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.black.withOpacity(0.25),
+          foregroundColor: Colors.white,
+          shadowColor: Colors.black54,
+          elevation: 6,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onPressed: onTap,
+        child: Text(label,
+            style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _secondaryButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+    required double width,
+    required double fontSize,
+  }) {
+    return SizedBox(
+      width: width,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white.withOpacity(0.15),
+          foregroundColor: Colors.white,
+          elevation: 4,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onPressed: onTap,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: fontSize * 0.9),
+            const SizedBox(width: 6),
+            Text(label,
+                style:
+                TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

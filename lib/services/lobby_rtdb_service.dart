@@ -247,10 +247,12 @@ class LobbyRtdbService {
   Future<void> updatePhase({
     required String sessionId,
     required String phase,
-    required bool isNewGame,
+    isNewGame,
   }) => _run<void>(() async {
     await _lobbyRef(sessionId).child('phase').set(phase);
-    await _lobbyRef(sessionId).child('isNewGame').set(isNewGame);
+    if(isNewGame != null) {
+      await _lobbyRef(sessionId).child('isNewGame').set(isNewGame);
+    }
   });
 
   Future<void> advanceToStoryPhase({
