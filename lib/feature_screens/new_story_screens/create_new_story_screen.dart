@@ -69,13 +69,34 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   /// Copy of `_dimensionGroups` with every dimension in `excludedDimensions`
   /// removed.  Groups that become empty are dropped entirely.
   Map<String, dynamic> _visibleGroups() {
-    final out = <String, Map<String, dynamic>>{};
+    // Recursive helper to filter a map at all levels
+    Map<String, dynamic> _filterMap(Map<String, dynamic> map) {
+      // 1) remove excluded keys at this level
+      final filtered = Map<String, dynamic>.from(map)
+        ..removeWhere((key, _) => excludedDimensions.contains(key));
+
+      // 2) for each entry, if it’s a map, recurse; otherwise keep as-is
+      final result = <String, dynamic>{};
+      filtered.forEach((key, value) {
+        if (value is Map<String, dynamic>) {
+          final nested = _filterMap(value);
+          if (nested.isNotEmpty) {
+            result[key] = nested;
+          }
+        } else {
+          result[key] = value;
+        }
+      });
+
+      return result;
+    }
+
+    final out = <String, dynamic>{};
 
     _dimensionGroups.forEach((groupName, group) {
       if (group is Map<String, dynamic>) {
-        final filtered = Map<String, dynamic>.from(group)
-          ..removeWhere((dim, _) => excludedDimensions.contains(dim));
-        if (filtered.isNotEmpty) out[groupName] = filtered;
+        final cleaned = _filterMap(group);
+        if (cleaned.isNotEmpty) out[groupName] = cleaned;
       }
     });
 
@@ -83,25 +104,45 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
   }
 
   /* ───────── helper maps ───────── */
+  /// Flattens an arbitrarily nested map into path → List<String>  where each
+  /// path ends at a leaf list or scalar.  Path segments are joined with dots.
+  Map<String, List<String>> _flattenLeaves(dynamic node, [String prefix = '']) {
+    final out = <String, List<String>>{};
 
-  /// Picks a random value for every dimension the user left as “random”.
-  /// (Hidden dimensions are *always* random because the user never sees them.)
-  Map<String, String> _randomDefaults() {
-    final defs = <String, String>{};
-
-    _dimensionGroups.forEach((_, group) {
-      if (group is Map<String, dynamic>) {
-        group.forEach((dim, values) {
-          if (values is List) {
-            defs[dim] =
-                _userChoices[dim] ?? (List<String>.from(values)..shuffle()).first;
-          }
-        });
+    void recurse(dynamic n, String path) {
+      if (n is Map<String, dynamic>) {
+        n.forEach((k, v) => recurse(v, path.isEmpty ? k : '$path.$k'));
+      } else if (n is Iterable) {
+        out[path] = n.map((e) => e.toString()).toList();
+      } else {
+        out[path] = [n.toString()];
       }
+    }
+
+    recurse(node, prefix);
+    return out;
+  }
+
+
+  /// Picks a random value for every leaf dimension the user left as “random”.
+  /// Keys in the returned map are **leaf names only**.
+  Map<String, String> _randomDefaults() {
+    final rand     = Random();
+    final defaults = <String, String>{};
+
+    // path → [options]
+    final leaves = _flattenLeaves(_dimensionGroups);
+
+    leaves.forEach((path, options) {
+      final leafKey = path.split('.').last;     // keep only the tail
+      defaults[leafKey] =
+          _userChoices[leafKey] ?? options[rand.nextInt(options.length)];
     });
 
-    return defs;
+    return defaults;
   }
+
+
 
   /// Only the dimensions explicitly picked by the user (for votes)
   Map<String, String> _votePayload() {

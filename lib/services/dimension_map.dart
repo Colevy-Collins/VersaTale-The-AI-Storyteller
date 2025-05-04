@@ -99,7 +99,7 @@ const Map<String, dynamic> groupedDimensionOptions = {
   },
   "Character": {
     "Protagonist Customization": {
-      "Background": [
+      "Protagonist's Background": [
         "Orphan",
         "Disgraced noble stripped of titles",
         "Reincarnated hero from an ancient prophecy",
@@ -107,7 +107,7 @@ const Map<String, dynamic> groupedDimensionOptions = {
         "Wandering scholar seeking lost knowledge",
         "Summoned outsider from a parallel reality"
       ],
-      "Abilities": [
+      "Protagonist's Abilities": [
         "Innate magic that remains largely untapped",
         "Advanced cybernetic implants from experimental tech",
         "Elite combat training from a clandestine order",
@@ -116,7 +116,7 @@ const Map<String, dynamic> groupedDimensionOptions = {
         "Ingenious tinkerer capable of jury-rigging gadgets",
         "Diplomatic skillset capable of swaying factions"
       ],
-      "Personality": [
+      "Protagonist's Personality": [
         "Harsh with a hidden soft side",
         "Cynical but fiercely loyal once trust is earned",
         "Quiet observer",
@@ -125,7 +125,7 @@ const Map<String, dynamic> groupedDimensionOptions = {
         "Pragmatic realist who operates in moral gray areas",
         "Playful trickster who challenges the status quo"
       ],
-      "Reputation": [
+      "Protagonist's Reputation": [
         "Revered champion hailed in legends",
         "Notorious outlaw with a substantial bounty",
         "Enigmatic wanderer whose deeds are whispered about",
@@ -144,14 +144,11 @@ const Map<String, dynamic> groupedDimensionOptions = {
     ]
   },
   "Gameplay & Challenges": {
-    "Difficulty (Encounters & Challenges)": [
-      "Laid-back, easy encounters for casual exploration",
-      "Balanced threats that escalate steadily",
-      "Punishing environment with frequent, intense danger",
-      "Slow build-up with brutal endgame challenges",
-      "Survival-focused with scarce resources",
-      "Puzzle-heavy with tactical or intellectual obstacles",
-      "Encounters that can be bypassed via stealth or diplomacy"
+    "Difficulty": [
+      "Easy",
+      "Normal",
+      "Hard",
+      "Nightmare",
     ],
     "Encounter Variations": [
       "Diplomatic standoffs requiring tact and persuasion",
@@ -202,15 +199,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "Major fork-in-the-road decisions leading to distinctly different conclusions",
       "Random or chance-based event triggers adding variability to each playthrough",
       "Return visits to earlier nodes, where prior choices may now have different results"
-    ],
-    "Puzzle & Final Challenge": [
-      "A sequence-based logic puzzle where each turn allows you to input a guess for the next number or symbol in a hidden pattern. Correct completion triggers the good ending, while repeated errors lead to a fail ending.",
-      "A grid alignment challenge: on each turn, you must reposition pieces to match a specific configuration. Achieving the correct layout unlocks the good ending; failing to align them properly results in the fail ending.",
-      "A deduction-based puzzle in which each turn reveals a clue about the correct combination of items or moves. Identifying the full set correctly grants the good ending; inaccuracies accumulate into a fail ending.",
-      "A code-breaking task where each turn you can modify one element of a cipher. Successfully cracking the code ensures the good ending; too many incorrect changes finalize in the fail ending.",
-      "A pattern-recognition test that presents a series of symbols each turn. Selecting the correct subsequent symbol each time leads to a good ending, but persistent wrong choices finalize in a fail ending.",
-      "A resource management scenario: each turn, you must choose how to allocate limited supplies or points. Optimal allocation produces the good ending, while mismanaged resources lock in the fail ending.",
-      "A branching-path decision maze where each turn offers multiple routes. Choosing a consistent path with correct logic yields the good ending, but straying into dead-ends accumulates errors, concluding in a fail ending."
     ],
     "Fail States": [
       "A growing burden of guilt that steadily erodes resolve, each misstep pushing the hero closer to a tragic breakdown.",
