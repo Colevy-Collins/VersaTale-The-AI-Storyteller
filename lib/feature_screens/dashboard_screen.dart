@@ -64,17 +64,74 @@ class HomeScreen extends StatelessWidget {
           if (g) {
             showDialog(
               context: ctx,
-              builder: (_) => AlertDialog(
-                title   : const Text('Continue Group Story'),
-                content : const Text(
-                  'Group stories are resumed from the multiplayer lobby. '
-                      'Invite others after continuing solo.',
-                ),
-                actions : [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('OK')),
-                ],
+              builder: (dialogCtx) => LayoutBuilder(
+                builder: (dialogCtx, constraints) {
+                  final bool tiny = constraints.maxWidth < 300 ||
+                      constraints.maxHeight < 420;
+                  const double kMaxW = 560, kMaxH = 600;
+                  final double w = constraints.maxWidth < kMaxW
+                      ? constraints.maxWidth * .95
+                      : kMaxW;
+                  final double h = constraints.maxHeight < kMaxH
+                      ? constraints.maxHeight * .85
+                      : kMaxH;
+
+                  return Dialog(
+                    insetPadding: EdgeInsets.zero,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: w, maxHeight: h),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // — Title
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              tiny ? 16 : 24,
+                              tiny ? 16 : 20,
+                              tiny ? 16 : 24,
+                              12,
+                            ),
+                            child: Text(
+                              'Continue Group Story',
+                              textAlign: TextAlign.center,
+                              style: tiny
+                                  ? Theme.of(dialogCtx).textTheme.titleMedium
+                                  : Theme.of(dialogCtx).textTheme.titleLarge,
+                            ),
+                          ),
+                          const Divider(height: 1),
+
+                          // — Body
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 16),
+                              child: Text(
+                                'Group stories are resumed by continuing a solo story and inviting a friend.',
+                                style: Theme.of(dialogCtx).textTheme.bodyMedium,
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1),
+
+                          // — Actions
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: tiny ? 4 : 8,
+                                vertical: tiny ? 4 : 8),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () => Navigator.pop(dialogCtx),
+                                child: const Text('OK'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             );
             return;

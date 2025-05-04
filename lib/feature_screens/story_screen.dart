@@ -169,18 +169,19 @@ class _StoryScreenState extends State<StoryScreen> {
         (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
       );
       if (!mounted) return;
+
       showDialog(
         context: context,
         builder: (_) => FullStoryDialog(
-          fullStory     : res['initialLeg'] ?? '',
-          dialogOptions : List<String>.from(res['options'] ?? []),
-          canPick       : !ctrl.busy &&
+          storyText: res['initialLeg'] ?? '',
+          choiceOptions: List<String>.from(res['options'] ?? []),
+          isChoiceSelectable: !ctrl.busy &&
               (ctrl.phase == StoryPhase.story || ctrl.phase == StoryPhase.vote),
-          onOptionSelected: (opt) {
+          onChoiceSelected: (opt) {
             Navigator.pop(context);
             ctrl.chooseNext(opt);
           },
-          onShowOptions: () {
+          onShowChoices: () {
             Navigator.pop(context);
             _optionSheet();
           },
