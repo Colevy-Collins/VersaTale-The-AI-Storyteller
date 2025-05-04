@@ -67,22 +67,24 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Reset Password',
-                            style: tt.titleLarge?.copyWith(
-                              fontSize : sz + 4,
-                              color    : Colors.white,
-                              fontWeight: FontWeight.bold,
-                              shadows  : const [
-                                Shadow(
-                                    color: Colors.black,
-                                    offset: Offset(1, 1),
-                                    blurRadius: 2),
-                              ],
-                            )),
+                        Text(
+                          'Reset Password',
+                          style: tt.titleLarge?.copyWith(
+                            fontSize : sz + 4,
+                            color    : Colors.white,
+                            fontWeight: FontWeight.bold,
+                            shadows  : const [
+                              Shadow(
+                                color: Colors.black,
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 30),
 
-                        authTextFormField(
-                          context   : context,
+                        AuthTextFormField(
                           controller: _emailCtrl,
                           label     : 'Email',
                           validator : (v) =>
@@ -93,8 +95,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _loading ? null : _reset,
-                            style: ElevatedButton.styleFrom(
+                            onPressed : _loading ? null : _reset,
+                            style     : ElevatedButton.styleFrom(
                               backgroundColor: cs.primary.withOpacity(.85),
                               foregroundColor: cs.onPrimary,
                               shape: RoundedRectangleBorder(
@@ -103,15 +105,19 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             ),
                             child: _loading
                                 ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2))
-                                : Text('Submit',
-                                style: tt.labelLarge?.copyWith(
-                                  fontSize  : sz,
-                                  fontWeight: FontWeight.bold,
-                                )),
+                              width : 24,
+                              height: 24,
+                              child : CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : Text(
+                              'Submit',
+                              style: tt.labelLarge?.copyWith(
+                                fontSize  : sz,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ],

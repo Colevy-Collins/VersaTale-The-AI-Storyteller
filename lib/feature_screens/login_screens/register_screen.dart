@@ -40,8 +40,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (res.user != null) {
       try { await _storySvc.updateLastAccessDate(); } catch (_) {}
-      showAuthSnackBar(context, 'Registration successful!',
-          background: Colors.green);
+      showAuthSnackBar(
+        context,
+        'Registration successful!',
+        background: Colors.green,
+      );
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -81,22 +84,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Create an Account',
-                            style: tt.titleLarge?.copyWith(
-                              fontSize : sz + 4,
-                              color    : Colors.white,
-                              fontWeight: FontWeight.bold,
-                              shadows  : const [
-                                Shadow(
-                                    color: Colors.black,
-                                    offset: Offset(1, 1),
-                                    blurRadius: 2),
-                              ],
-                            )),
+                        Text(
+                          'Create an Account',
+                          style: tt.titleLarge?.copyWith(
+                            fontSize : sz + 4,
+                            color    : Colors.white,
+                            fontWeight: FontWeight.bold,
+                            shadows  : const [
+                              Shadow(
+                                color: Colors.black,
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 30),
 
-                        authTextFormField(
-                          context   : context,
+                        AuthTextFormField(
                           controller: _emailCtrl,
                           label     : 'Email',
                           validator : (v) =>
@@ -104,11 +109,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 15),
 
-                        authTextFormField(
-                          context   : context,
+                        AuthTextFormField(
                           controller: _pwCtrl,
                           label     : 'Password',
-                          obscureText: true,
+                          isPassword: true,                 // 👈 show / hide
                           validator : (v) =>
                           (v ?? '').isEmpty ? 'Enter password' : null,
                         ),
@@ -117,8 +121,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _loading ? null : _register,
-                            style: ElevatedButton.styleFrom(
+                            onPressed : _loading ? null : _register,
+                            style     : ElevatedButton.styleFrom(
                               backgroundColor: cs.primary.withOpacity(.85),
                               foregroundColor: cs.onPrimary,
                               shape: RoundedRectangleBorder(
@@ -127,15 +131,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             child: _loading
                                 ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2))
-                                : Text('Register',
-                                style: tt.labelLarge?.copyWith(
-                                  fontSize  : sz,
-                                  fontWeight: FontWeight.bold,
-                                )),
+                              width : 24,
+                              height: 24,
+                              child : CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : Text(
+                              'Register',
+                              style: tt.labelLarge?.copyWith(
+                                fontSize  : sz,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ],

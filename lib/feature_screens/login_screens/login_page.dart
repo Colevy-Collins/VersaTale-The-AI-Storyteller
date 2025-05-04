@@ -42,6 +42,7 @@ class _LoginPageState extends State<LoginPage> {
     );
 
     if (res.user != null) {
+      // Load user‑specific theme & update last‑access date.
       try {
         final profile = await _storySvc.getUserProfile();
         if (mounted) context.read<ThemeNotifier>().loadFromProfile(profile);
@@ -87,19 +88,18 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        authTextFormField(
-                          context   : context,
+                        AuthTextFormField(
                           controller: _emailCtrl,
                           label     : 'Email',
                           validator : (v) =>
                           (v ?? '').isEmpty ? 'Enter email' : null,
                         ),
                         const SizedBox(height: 15),
-                        authTextFormField(
-                          context   : context,
+
+                        AuthTextFormField(
                           controller: _pwCtrl,
                           label     : 'Password',
-                          obscureText: true,
+                          isPassword: true,                 // 👈 show / hide
                           validator : (v) =>
                           (v ?? '').isEmpty ? 'Enter password' : null,
                         ),
@@ -115,13 +115,16 @@ class _LoginPageState extends State<LoginPage> {
                             onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (_) => const ForgotPasswordPage()),
+                                builder: (_) => const ForgotPasswordPage(),
+                              ),
                             ),
-                            child: Text('Forgot Password?',
-                                style: tt.labelMedium?.copyWith(
-                                  color      : cs.onSurface,
-                                  decoration : TextDecoration.underline,
-                                )),
+                            child: Text(
+                              'Forgot Password?',
+                              style: tt.labelMedium?.copyWith(
+                                color      : cs.onSurface,
+                                decoration : TextDecoration.underline,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -139,15 +142,19 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: _loading
                                 ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2))
-                                : Text('Log In',
-                                style: tt.labelLarge?.copyWith(
-                                  fontSize  : sz,
-                                  fontWeight: FontWeight.bold,
-                                )),
+                              width : 24,
+                              height: 24,
+                              child : CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : Text(
+                              'Log In',
+                              style: tt.labelLarge?.copyWith(
+                                fontSize  : sz,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ],
