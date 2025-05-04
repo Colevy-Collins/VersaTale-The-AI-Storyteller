@@ -4,61 +4,52 @@
 const Map<String, dynamic> groupedDimensionOptions = {
   "Setting": {
     "Time": [
-      "Ancient era with mythic underpinnings",
-      "An unspecified far-future epoch on the brink of collapse",
+      "Ancient era",
+      "Typical modern day time",
+      "An unspecified far-future society on the brink of collapse",
       "A timeless realm outside standard chronology",
-      "Mid-20th century in an alternate historical branch",
-      "A cyclical age that repeats after catastrophic events",
-      "A present-day setting with slight anachronisms",
       "A post-apocalyptic timeline rising from ashes"
     ],
     "Place": [
-      "A sprawling metropolis filled with hidden enclaves",
+      "A sprawling metropolis",
       "A remote frontier settlement on the edge of civilization",
       "A labyrinthine underground city beneath ruins",
-      "An airborne archipelago of floating islands",
       "A shifting dreamscape that defies conventional geography",
-      "A cosmic spacecraft on an interstellar voyage",
-      "A secluded monastery high in the mountains"
+      "A cosmic spacecraft",
     ],
     "Physical Environment": [
       "Towering desert dunes with occasional hidden oases",
-      "Dense, haunted forests teeming with mystical fauna",
-      "Submerged aquatic realms requiring unique traversal methods",
+      "Dense, haunted forests",
       "Gravity-defying landscapes where directions shift unexpectedly",
       "Rolling plains frequently hammered by harsh storms",
       "Volcanic terrain scarred by ancient eruptions",
-      "Glacial expanses marked by drifting icebergs and hidden caves"
+      "Frigid, snowy environment marked with icebergs and hidden caves"
     ],
     "Cultural & Social Context": [
-      "Deeply stratified society with strict caste systems",
-      "A theocratic realm governed by rigid religious dogma",
+      "Deeply depraved society with strict caste systems",
       "Nomadic tribes competing for scarce resources",
-      "A multicultural hub with tense inter-faction politics",
       "A utopian facade hiding a tightly controlled state",
       "Small, insular villages clinging to ancient beliefs",
       "A federation of city-states with unstable alliances"
     ],
     "Technology & Level of Advancement": [
-      "Steam-powered gadgets and rudimentary robotics",
+      "Steam-powered gadgets and unsophisticated robotics",
       "Advanced biotechnology overshadowing mechanical inventions",
       "Magical constructs woven into everyday life",
-      "Cybernetic enhancements ubiquitous among the populace",
-      "Hybrid medieval and arcane technologies coexisting",
-      "Minimal to no technology, emphasizing primal survival",
+      "Hybrid medieval and arcane technologies",
+      "Minimal to no technology",
       "AI-driven society balancing organic and synthetic lifeforms"
     ],
     "Mood & Atmosphere": [
-      "Oppressive and claustrophobic, with constant foreboding",
-      "Whimsical and lighthearted, hiding subtle darkness",
+      "Oppressive and claustrophobic",
+      "Whimsical and lighthearted",
       "Tense and suspenseful, where trust is scarce",
       "Energetic and adventurous, brimming with discovery",
       "Somber and reflective, hinting at a long-lost glory",
       "Eerie and silent, each sound amplified by emptiness",
-      "Chaotic and unpredictable, shifting from calm to crisis"
+      "Chaotic and unpredictable"
     ],
     "World-Building Details": [
-      "Frequent natural disasters reshaping daily life",
       "Portals to alternate dimensions appear sporadically",
       "Celestial bodies influencing magic or fate cycles",
       "Trade routes bridging distant cultures and species",
@@ -69,38 +60,32 @@ const Map<String, dynamic> groupedDimensionOptions = {
   },
   "Narrative": {
     "Genre": [
-      "High fantasy with epic scope",
+      "Fantasy",
       "Cyberpunk dystopia",
-      "Western-influenced fantasy hybrid",
-      "Space opera with mythic elements",
-      "Historical fiction tinged with the supernatural",
-      "Modern urban fantasy",
-      "Dark sci-fi horror",
-      "Steampunk adventure with industrial flair",
-      "Surreal dream-like narrative",
-      "Post-apocalyptic survival drama"
+      "Historical",
+      "Sci-fi",
+      "Steampunk",
+      "Surreal dream-like",
+      "Survival",
+      "Horror"
     ],
     "Tone": [
-      "Light-hearted and comedic, peppered with jokes",
-      "Dark and tragic, emphasizing despair",
+      "Light-hearted and comedic",
+      "Dark and tragic",
       "Philosophical and introspective, exploring deep themes",
-      "Action-packed and heroic, celebrating courage",
-      "Grim realism showcasing harsh consequences",
+      "Action-packed and heroic",
       "Hopeful yet bittersweet, balancing ups and downs",
       "Mystically eerie with constant uncertainty",
       "Melodramatic and emotionally charged",
-      "Cautiously optimistic, focusing on perseverance"
     ],
     "Style": [
-      "First-person narration with a confessional vibe",
-      "Omniscient third-person with cinematic flair",
+      "First-person narration",
+      "Omniscient third-person",
       "Epistolary format using letters, diaries, or logs",
       "Fragmented storytelling with overlapping timelines",
       "Poetic, dreamlike prose focusing on atmosphere",
       "Concise and minimalistic writing style",
       "Archaic, ornate language reminiscent of classic epics",
-      "A straightforward, documentary-style approach",
-      "A hybrid collage of narrative techniques"
     ],
     "Perspective": [
       "Single, intimate viewpoint of the protagonist",
@@ -115,12 +100,11 @@ const Map<String, dynamic> groupedDimensionOptions = {
   "Character": {
     "Protagonist Customization": {
       "Background": [
-        "Orphan raised among nomadic performers",
+        "Orphan",
         "Disgraced noble stripped of titles",
         "Reincarnated hero from an ancient prophecy",
         "Average individual thrust into extraordinary events",
         "Wandering scholar seeking lost knowledge",
-        "Exiled criminal trying to clear their name",
         "Summoned outsider from a parallel reality"
       ],
       "Abilities": [
@@ -133,10 +117,10 @@ const Map<String, dynamic> groupedDimensionOptions = {
         "Diplomatic skillset capable of swaying factions"
       ],
       "Personality": [
-        "Brash risk-taker with a hidden soft side",
+        "Harsh with a hidden soft side",
         "Cynical but fiercely loyal once trust is earned",
-        "Quiet observer with an iron will",
-        "Overly curious, often stumbling into trouble",
+        "Quiet observer",
+        "Overly curious",
         "Hot-tempered protector defending the weak",
         "Pragmatic realist who operates in moral gray areas",
         "Playful trickster who challenges the status quo"
@@ -147,7 +131,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
         "Enigmatic wanderer whose deeds are whispered about",
         "A public figure overshadowed by a dreaded prophecy",
         "Unknown adventurer starting from obscurity",
-        "Feared enforcer tainted by their past",
         "Trusted advisor or confidante to those in power"
       ]
     },
@@ -155,11 +138,8 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "A shadowy mastermind manipulating events behind the scenes",
       "A corrupted former ally consumed by greed or ambition",
       "A primal force of nature indifferent to morality",
-      "A charismatic tyrant intent on subjugation",
       "A tragic figure seeking twisted redemption",
-      "An ancient cosmic horror awakening from slumber",
       "A rival with overlapping goals but conflicting methods",
-      "A feared warlord forging alliances through terror",
       "A visionary prophet led astray by forbidden knowledge"
     ]
   },
@@ -168,15 +148,13 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "Laid-back, easy encounters for casual exploration",
       "Balanced threats that escalate steadily",
       "Punishing environment with frequent, intense danger",
-      "Slow build-up culminating in brutal endgame challenges",
+      "Slow build-up with brutal endgame challenges",
       "Survival-focused with scarce resources",
-      "Puzzle-heavy with tactical or intellectual barriers",
+      "Puzzle-heavy with tactical or intellectual obstacles",
       "Encounters that can be bypassed via stealth or diplomacy"
     ],
     "Encounter Variations": [
       "Diplomatic standoffs requiring tact and persuasion",
-      "High-speed chases across precarious terrain",
-      "Epic large-scale battles with multiple factions",
       "Stealth infiltrations through heavily guarded sites",
       "Complex puzzles blocking critical paths",
       "Spiritual or psychic showdowns in dreamlike realms",
@@ -188,28 +166,21 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "Sacrificing one group to save another",
       "Using forbidden power at the risk of corruption",
       "Betraying an ally to serve a larger cause",
-      "Adhering strictly to the law versus personal ethics",
-      "Forsaking personal desire to uphold communal welfare",
       "Confronting deeply held biases or illusions",
       "Deciding an enemy’s fate: mercy or execution",
       "Accepting or rejecting a morally gray alliance"
     ],
     "Story Pacing": [
-      "Rapid, relentless progression with little respite",
+      "Rapid, relentless progression",
       "Slow-burn growth focusing on relationships and depth",
-      "Episodic arcs with varying thematic focuses",
-      "Constant tension with short-lived calm moments",
       "Gradual build to a high-intensity finale",
       "Nonlinear timeline with flashbacks and reveals",
-      "Chaotic pace reflecting unpredictable events"
     ],
     "Final Objective": [
       "Destroying or sealing a world-altering artifact",
       "Overthrowing an oppressive regime",
-      "Restoring balance to an ailing ecosystem or realm",
       "Uncovering and halting a grand conspiracy",
       "Preventing an imminent apocalyptic threat",
-      "Uniting rival factions in pursuit of peace",
       "Escaping a doomed land before total collapse",
       "Achieving transcendence to a higher plane",
       "Exposing the true puppet master behind all conflicts"
@@ -217,7 +188,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
     "Consequences of Failure": [
       "Complete devastation of a civilization",
       "Permanent corruption twisting the hero or the land",
-      "Enslavement under the antagonist’s rule",
       "Civil discord breaking society beyond repair",
       "Immediate cosmic or supernatural catastrophe",
       "Hero’s fall into despair or exile",
@@ -230,7 +200,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "Subtle shifts in outcomes based on moral or ethical stances",
       "Alignment tracking that influences future interactions and opportunities",
       "Major fork-in-the-road decisions leading to distinctly different conclusions",
-      "Optional side objectives that can be accepted or ignored without halting progress",
       "Random or chance-based event triggers adding variability to each playthrough",
       "Return visits to earlier nodes, where prior choices may now have different results"
     ],
@@ -246,7 +215,7 @@ const Map<String, dynamic> groupedDimensionOptions = {
     "Fail States": [
       "A growing burden of guilt that steadily erodes resolve, each misstep pushing the hero closer to a tragic breakdown.",
       "Allies becoming disillusioned or turning hostile, leading to isolation and a near-inevitable downfall if trust isn’t rebuilt.",
-      "A spiraling series of compromises where each wrong decision darkens the hero’s path, eventually locking them into a catastrophic finale.",
+      "A spiraling series of compromises where each wrong decision darkens the path, eventually locking them into a catastrophic finale.",
       "Escalating corruption that twists the protagonist’s motives, culminating in a self-inflicted collapse or villainous turn.",
       "Key resources or strongholds lost one by one, leaving the hero ill-equipped for the final confrontation and dooming them to failure.",
       "Public outrage or a severe reputation collapse that triggers desperation, increasing the likelihood of irreversible tragedy.",
