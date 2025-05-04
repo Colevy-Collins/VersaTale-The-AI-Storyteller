@@ -22,7 +22,7 @@ import '../widgets/story_text_area.dart';
 import '../widgets/full_story_dialog.dart';
 import 'dashboard_screen.dart';
 import '../feature_screens/login_screens/main_splash_screen.dart';
-import 'mutiplayer_screens/multiplayer_host_lobby_screen.dart';
+import 'multiplayer_screens/multiplayer_host_lobby_screen.dart';
 
 enum _MenuOption {
   backToScreen,

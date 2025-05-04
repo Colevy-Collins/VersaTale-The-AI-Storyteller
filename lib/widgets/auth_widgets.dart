@@ -1,9 +1,7 @@
-// lib/widgets/auth_widgets.dart
+import 'dart:math';
 import 'package:flutter/material.dart';
 
-/// ─────────────────────────────────────────────────────────────────────────
-///  BACK‑ARROW used on all auth screens
-/// ─────────────────────────────────────────────────────────────────────────
+/// ───────── Re‑usable back arrow ─────────
 class AuthBackButton extends StatelessWidget {
   const AuthBackButton({super.key});
 
@@ -11,7 +9,7 @@ class AuthBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      width : 32,
+      width: 32,
       height: 32,
       decoration: BoxDecoration(
         color: cs.surfaceVariant.withOpacity(.6),
@@ -27,48 +25,35 @@ class AuthBackButton extends StatelessWidget {
   }
 }
 
-/// ─────────────────────────────────────────────────────────────────────────
-///  RE‑USABLE SnackBar helper
-/// ─────────────────────────────────────────────────────────────────────────
-void showAuthSnackBar(
-    BuildContext ctx,
-    String message, {
-      Color? background,
-    }) {
-  final cs = Theme.of(ctx).colorScheme;
-  ScaffoldMessenger.of(ctx).showSnackBar(
-    SnackBar(
-      content        : Text(message),
-      backgroundColor: background ?? cs.primary,
-      behavior       : SnackBarBehavior.floating,
-    ),
-  );
-}
-
-/// ─────────────────────────────────────────────────────────────────────────
-///  DEFAULT decoration (pulled into its own function so both widgets share it)
-/// ─────────────────────────────────────────────────────────────────────────
-InputDecoration _decoration(BuildContext ctx, String label,
-    {Color? fillColor, Widget? suffixIcon}) {
+/// ───────── Common input decoration ─────────
+InputDecoration authInputDecoration(BuildContext ctx, String label) {
   final cs = Theme.of(ctx).colorScheme;
   final tt = Theme.of(ctx).textTheme;
 
   return InputDecoration(
-    labelText : label,
-    labelStyle: tt.labelLarge?.copyWith(color: cs.onSurface),
+    labelText  : label,
+    labelStyle : tt.labelLarge?.copyWith(color: cs.onSurface),
+    border     : OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    enabledBorder: OutlineInputBorder(
+      borderSide : BorderSide(color: cs.outlineVariant),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderSide : BorderSide(color: cs.primary, width: 2),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    // ► filled/fillColor now overridden in the field’s build method
     filled    : true,
-    fillColor : fillColor ?? cs.surfaceVariant.withOpacity(.4),
-    suffixIcon: suffixIcon,
-    border    : OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    fillColor : cs.surfaceVariant.withOpacity(.3),
   );
 }
 
-/// ─────────────────────────────────────────────────────────────────────────
-///  NEW  ►  AuthTextFormField
-///         * Pass `isPassword:true` to get the eye‑icon toggle
-///         * Field background becomes solid when it contains text
-/// ─────────────────────────────────────────────────────────────────────────
+/// ───────── Single‑line text field used by every auth page ─────────
 class AuthTextFormField extends StatefulWidget {
+  final TextEditingController controller;
+  final String   label;
+  final String? Function(String?)? validator;
+  final bool     isPassword;
   const AuthTextFormField({
     super.key,
     required this.controller,
@@ -77,50 +62,54 @@ class AuthTextFormField extends StatefulWidget {
     this.isPassword = false,
   });
 
-  final TextEditingController      controller;
-  final String                     label;
-  final FormFieldValidator<String>? validator;
-  final bool                       isPassword;
-
   @override
   State<AuthTextFormField> createState() => _AuthTextFormFieldState();
 }
 
 class _AuthTextFormFieldState extends State<AuthTextFormField> {
-  late bool _obscure;     // only used when isPassword == true
+  bool _obscure = true;
 
   @override
   void initState() {
     super.initState();
-    _obscure = widget.isPassword;                    // start hidden for pw
-    widget.controller.addListener(() {
-      if (mounted) setState(() {});                  // repaint when text changes
-    });
+    widget.controller.addListener(_onChanged);
   }
 
   @override
+  void didUpdateWidget(covariant AuthTextFormField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onChanged);
+      widget.controller.addListener(_onChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() => setState(() {});
+
+  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final cs       = Theme.of(context).colorScheme;
+    final hasText  = widget.controller.text.isNotEmpty;
 
     return TextFormField(
       controller : widget.controller,
       validator  : widget.validator,
       obscureText: widget.isPassword ? _obscure : false,
-      style      : tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-      decoration : _decoration(
-        context,
-        widget.label,
-        fillColor: widget.controller.text.isEmpty
-            ? cs.surfaceVariant.withOpacity(.6)      // translucent
-            : cs.surfaceVariant,                     // solid when not empty
+      decoration : authInputDecoration(context, widget.label).copyWith(
+        fillColor : cs.surfaceVariant.withOpacity(hasText ? 1.0 : .3),
         suffixIcon: widget.isPassword
             ? IconButton(
-          icon : Icon(
-            _obscure ? Icons.visibility : Icons.visibility_off,
-          ),
-          tooltip : _obscure ? 'Show password' : 'Hide password',
-          onPressed: () => setState(() => _obscure = !_obscure),
+          icon : Icon(_obscure
+              ? Icons.visibility_off
+              : Icons.visibility),
+          onPressed: () =>
+              setState(() => _obscure = !_obscure),
         )
             : null,
       ),
@@ -128,29 +117,118 @@ class _AuthTextFormFieldState extends State<AuthTextFormField> {
   }
 }
 
-/// ─────────────────────────────────────────────────────────────────────────
-///  (OPTIONAL) LEGACY helper kept for non‑password simple inputs
-///             – use AuthTextFormField everywhere if you prefer
-/// ─────────────────────────────────────────────────────────────────────────
-Widget authTextFormField({
-  required BuildContext context,
-  required TextEditingController controller,
-  required String label,
-  bool obscureText = false,
-  String? Function(String?)? validator,
-}) {
-  final tt = Theme.of(context).textTheme;
-  final cs = Theme.of(context).colorScheme;
-
-  return TextFormField(
-    controller : controller,
-    obscureText: obscureText,
-    validator  : validator,
-    style      : tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-    decoration : _decoration(
-      context,
-      label,
-      fillColor: cs.surfaceVariant.withOpacity(.4),
-    ),
+/// ───────── Quick snackbar helper ─────────
+void showAuthSnackBar(
+    BuildContext context,
+    String message, {
+      Color? background,
+    }) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message), backgroundColor: background),
   );
+}
+
+/// ───────── Page shell with common background & (optional) back arrow ─────────
+class AuthPageShell extends StatelessWidget {
+  final Widget child;
+  final bool   showBack;
+  const AuthPageShell({
+    super.key,
+    required this.child,
+    this.showBack = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: Image(
+                image: AssetImage('assets/versatale_home_image.png'),
+                fit  : BoxFit.cover,
+              ),
+            ),
+            if (showBack)
+              const Positioned(top: 10, left: 10, child: AuthBackButton()),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ───────── Consistent big white headline ─────────
+class AuthHeader extends StatelessWidget {
+  final String text;
+  const AuthHeader(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final w  = MediaQuery.sizeOf(context).width;
+    final sz = min(w * .05, 22.0) + 4;
+
+    final tt = Theme.of(context).textTheme;
+    return Text(
+      text,
+      style: tt.titleLarge?.copyWith(
+        fontSize : sz,
+        color    : Colors.white,
+        fontWeight: FontWeight.bold,
+        shadows  : const [
+          Shadow(color: Colors.black, offset: Offset(1, 1), blurRadius: 2),
+        ],
+      ),
+    );
+  }
+}
+
+/// ───────── Primary “action” button with built‑in loading spinner ─────────
+class AuthActionButton extends StatelessWidget {
+  final String       label;
+  final bool         loading;
+  final VoidCallback? onPressed;
+  const AuthActionButton({
+    super.key,
+    required this.label,
+    required this.loading,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final w  = MediaQuery.sizeOf(context).width;
+    final sz = min(w * .05, 22.0);
+
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed : loading ? null : onPressed,
+        style     : ElevatedButton.styleFrom(
+          backgroundColor: cs.primary.withOpacity(.85),
+          foregroundColor: cs.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: loading
+            ? const SizedBox(
+          width : 24,
+          height: 24,
+          child : CircularProgressIndicator(strokeWidth: 2),
+        )
+            : Text(
+          label,
+          style: tt.labelLarge?.copyWith(
+            fontSize  : sz,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
 }

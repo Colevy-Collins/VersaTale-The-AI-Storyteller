@@ -1,30 +1,45 @@
 // lib/widgets/dimension_picker.dart
+//
+// Renders all story‑dimension pickers.
+// • Scales down to 240 × 340 px.
+// • Handles one‑level and two‑level (nested) dimensions.
+// • When [readOnlyJoiner] is true every dropdown is disabled so
+//   joiners can view—but not change—the host’s choices.
+
 import 'package:flutter/material.dart';
+import 'info_banner.dart';
 
 typedef OnDimChanged    = void Function(String dimKey, String? newVal);
 typedef OnExpandChanged = void Function(String groupKey, bool expanded);
 
+const String _kInfoMsg =
+    'Pick only the options you care about — anything left unselected '
+    'will be RANDOM!\n\n'
+    '⚠️  Some dimensions are two‑step: first pick a category, then an option form the new list.';
+
 class DimensionPicker extends StatefulWidget {
-  final Map<String, dynamic> groups;
-  final Map<String, String?> choices;     // leaf‑only map
-  final Map<String, bool>    expanded;
-  final OnDimChanged         onChanged;
-  final OnExpandChanged      onExpand;
+  final Map<String, dynamic> groups;      // grouped dimension map
+  final Map<String, String?> choices;     // currently‑selected leaves
+  final Map<String, bool>    expanded;    // which group cards are open
+  final OnDimChanged         onDimChanged;
+  final OnExpandChanged      onExpandChanged;
+  final bool                 readOnlyJoiner;
 
   const DimensionPicker({
     super.key,
     required this.groups,
     required this.choices,
     required this.expanded,
-    required this.onChanged,
-    required this.onExpand,
+    required this.onDimChanged,
+    required this.onExpandChanged,
+    this.readOnlyJoiner = false,
   });
 
   @override
   State<DimensionPicker> createState() => _DimensionPickerState();
 }
 
-/* ─────────────────────────────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────── */
 
 class _DimensionPickerState extends State<DimensionPicker> {
   /// Tracks the user’s pick in each *parent* dropdown of a nested map.
@@ -32,186 +47,165 @@ class _DimensionPickerState extends State<DimensionPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final width  = MediaQuery.of(context).size.width;
-    final narrow = width < 320;                       // watch‑sized screens
-    final tt     = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
+    final width   = MediaQuery.of(context).size.width;
+    final narrow  = width < 320;                       // watch‑sized screens
+    final tt      = Theme.of(context).textTheme;
+    final scheme  = Theme.of(context).colorScheme;
 
-    /* ── top banner ───────────────────────────────────────────── */
-    final widgets = <Widget>[
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: scheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          crossAxisAlignment:
-          narrow ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-          children: [
-            Icon(Icons.info_outline,
-                color: scheme.onSecondaryContainer,
-                size: narrow ? 20 : 28),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                narrow
-                    ? 'Unpicked options are random. Some options have two-step selection: pick a group, then pick an option.'
-                    : 'Pick only the options you care about — anything left '
-                    'unselected will be RANDOMLY chosen!\n\n'
-                    '⚠️  Some dimensions have extra levels. Choose a '
-                    'category first; a second list will appear.',
-                style: tt.bodyMedium?.copyWith(
-                  fontSize : narrow ? 12 : 16,
-                  fontWeight: FontWeight.w700,
-                  color     : scheme.onSecondaryContainer,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    /* ── top banner ─────────────────────────────────────────── */
+    final List<Widget> widgets = [
+      const InfoBanner(message: _kInfoMsg),
       const SizedBox(height: 12),
     ];
 
-    /* ── each dimension group ─────────────────────────────────── */
-    widgets.addAll(widget.groups.entries.map((groupEntry) {
-      final groupKey = groupEntry.key;
-      final rawValue = groupEntry.value;
-
-      // flatten group to map<dimKey, rawVal>
-      final dimsRaw = <String, dynamic>{};
-      if (rawValue is Map<String, dynamic>) {
-        dimsRaw.addAll(rawValue);
+    /* ── build one card per dimension group ────────────────── */
+    widget.groups.forEach((groupKey, groupVal) {
+      final Map<String, dynamic> dimsRaw = {};
+      if (groupVal is Map<String, dynamic>) {
+        dimsRaw.addAll(groupVal);
       } else {
-        dimsRaw[groupKey] = rawValue;
+        dimsRaw[groupKey] = groupVal;
       }
 
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Card(
-          child: ExpansionTile(
-            title: Text(
-              groupKey,
-              style: tt.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                fontSize  : narrow ? 14 : null,
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Card(
+            child: ExpansionTile(
+              title: Text(
+                groupKey,
+                style: tt.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize  : narrow ? 14 : null,
+                ),
               ),
-            ),
-            initiallyExpanded: widget.expanded[groupKey] ?? false,
-            onExpansionChanged: (o) => widget.onExpand(groupKey, o),
-            children: dimsRaw.entries.map((dimEntry) {
-              final dimKey = dimEntry.key;
-              final value  = dimEntry.value;
+              initiallyExpanded: widget.expanded[groupKey] ?? false,
+              onExpansionChanged: (o) =>
+                  widget.onExpandChanged(groupKey, o),
+              children: dimsRaw.entries.map((dimEntry) {
+                final dimKey = dimEntry.key;
+                final rawVal = dimEntry.value;
 
-              /* ── nested map → two dropdowns ───────────────── */
-              if (value is Map<String, dynamic>) {
-                final parentPick = _parentSelections[dimKey];
-                final nestedMap  = value;
+                /* ── NESTED MAP → two dropdowns ─────────────── */
+                if (rawVal is Map<String, dynamic>) {
+                  // Determine current parent pick
+                  String? parentPick = _parentSelections[dimKey];
+                  parentPick ??= rawVal.keys.firstWhere(
+                        (k) => widget.choices.containsKey(k),
+                    orElse: () => '',
+                  );
+                  if (parentPick.isEmpty) parentPick = null;
 
-                final childOptions = parentPick != null
-                    ? _asStrings(nestedMap[parentPick])
-                    : const <String>[];
+                  final childOptions = parentPick != null
+                      ? _asStrings(rawVal[parentPick])
+                      : const <String>[];
 
-                final childPick = parentPick != null
-                    ? widget.choices[parentPick]          // leaf key == parentPick
-                    : null;
+                  final childPick = parentPick != null
+                      ? widget.choices[parentPick]
+                      : null;
 
-                Widget parentDropdown = DropdownButton<String>(
-                  isExpanded: true,
-                  value     : parentPick,
-                  hint      : _padText(dimKey, tt, narrow),
-                  items: nestedMap.keys
-                      .map((k) => DropdownMenuItem<String>(
-                    value: k,
-                    child: _padText(k, tt, narrow),
-                  ))
-                      .toList(),
-                  onChanged: (v) => setState(() {
-                    _parentSelections[dimKey] = v;
-                    widget.onChanged(v!, null);   // clear any previous leaf pick
-                  }),
-                );
+                  Widget parentDropdown = DropdownButton<String>(
+                    isExpanded: true,
+                    value     : parentPick,
+                    hint      : _paddedText(dimKey, tt, narrow),
+                    items: rawVal.keys
+                        .map((k) => DropdownMenuItem<String>(
+                      value: k,
+                      child: _paddedText(k, tt, narrow),
+                    ))
+                        .toList(),
+                    onChanged: widget.readOnlyJoiner
+                        ? null
+                        : (v) => setState(() {
+                      _parentSelections[dimKey] = v;
+                      if (v != null) widget.onDimChanged(v, null);
+                    }),
+                  );
 
-                // For very narrow screens stack tooltip below to avoid overflow
-                Widget tooltip = Tooltip(
-                  message:
-                  'Pick a category first; a second list of options appears.',
-                  preferBelow: false,
-                  child: Icon(Icons.help_outline,
-                      size: narrow ? 16 : 20,
-                      color: scheme.onSurfaceVariant),
-                );
+                  Widget tooltip = Tooltip(
+                    message:
+                    'Pick a category first; a second list of options appears.',
+                    preferBelow: false,
+                    child: Icon(Icons.help_outline,
+                        size : narrow ? 16 : 20,
+                        color: scheme.onSurfaceVariant),
+                  );
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        narrow
+                            ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            parentDropdown,
+                            const SizedBox(height: 4),
+                            tooltip,
+                          ],
+                        )
+                            : Row(
+                          children: [
+                            Expanded(child: parentDropdown),
+                            const SizedBox(width: 4),
+                            tooltip,
+                          ],
+                        ),
+                        if (parentPick != null) ...[
+                          const SizedBox(height: 12),
+                          DropdownButton<String>(
+                            isExpanded: true,
+                            value     : childPick,
+                            hint      : _paddedText(
+                                'Select $parentPick', tt, narrow),
+                            items: childOptions
+                                .map((v) => DropdownMenuItem<String>(
+                              value: v,
+                              child: _paddedText(v, tt, narrow),
+                            ))
+                                .toList(),
+                            onChanged: widget.readOnlyJoiner
+                                ? null
+                                : (v) =>
+                                widget.onDimChanged(parentPick!, v),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }
+
+                /* ── SINGLE‑LEVEL dimension ─────────────────── */
+                final options = _asStrings(rawVal);
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      narrow
-                          ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          parentDropdown,
-                          const SizedBox(height: 4),
-                          tooltip,
-                        ],
-                      )
-                          : Row(
-                        children: [
-                          Expanded(child: parentDropdown),
-                          const SizedBox(width: 4),
-                          tooltip,
-                        ],
-                      ),
-                      if (parentPick != null) ...[
-                        const SizedBox(height: 12),
-                        DropdownButton<String>(
-                          isExpanded: true,
-                          value     : childPick,
-                          hint      : _padText('Select $parentPick', tt, narrow),
-                          items: childOptions
-                              .map((v) => DropdownMenuItem<String>(
-                            value: v,
-                            child: _padText(v, tt, narrow),
-                          ))
-                              .toList(),
-                          onChanged: (v) =>
-                              widget.onChanged(parentPick, v),
-                        ),
-                      ],
-                    ],
+                  child: DropdownButton<String>(
+                    isExpanded   : true,
+                    value        : widget.choices[dimKey],
+                    itemHeight   : null,
+                    menuMaxHeight: 400,
+                    hint         : _paddedText(dimKey, tt, narrow),
+                    items: options
+                        .map((v) => DropdownMenuItem<String>(
+                      value: v,
+                      child: _paddedText(v, tt, narrow),
+                    ))
+                        .toList(),
+                    onChanged: widget.readOnlyJoiner
+                        ? null
+                        : (v) => widget.onDimChanged(dimKey, v),
                   ),
                 );
-              }
-
-              /* ── single dropdown (one‑level dimension) ─────── */
-              final options = _asStrings(value);
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8),
-                child: DropdownButton<String>(
-                  isExpanded   : true,
-                  value        : widget.choices[dimKey],
-                  itemHeight   : null,
-                  menuMaxHeight: 400,
-                  hint         : _padText(dimKey, tt, narrow),
-                  items: options
-                      .map((v) => DropdownMenuItem<String>(
-                    value: v,
-                    child: _padText(v, tt, narrow),
-                  ))
-                      .toList(),
-                  onChanged: (v) => widget.onChanged(dimKey, v),
-                ),
-              );
-            }).toList(),
+              }).toList(),
+            ),
           ),
         ),
       );
-    }));
+    });
 
     return Column(children: widgets);
   }
@@ -221,7 +215,7 @@ class _DimensionPickerState extends State<DimensionPicker> {
   List<String> _asStrings(dynamic v) =>
       v is Iterable ? v.map((e) => e.toString()).toList() : [v.toString()];
 
-  Padding _padText(String txt, TextTheme tt, bool narrow) => Padding(
+  Padding _paddedText(String txt, TextTheme tt, bool narrow) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Text(
       txt,

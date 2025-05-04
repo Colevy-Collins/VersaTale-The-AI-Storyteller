@@ -5,7 +5,7 @@ import 'login_screens/main_splash_screen.dart';
 import 'new_story_screens/create_new_story_screen.dart';
 import 'story_archives_screen.dart';
 import 'story_screen.dart';
-import 'mutiplayer_screens/join_multiplayer_screen.dart';
+import 'multiplayer_screens/join_multiplayer_screen.dart';
 import '../services/story_service.dart';
 import '../services/auth_service.dart';
 import '../utils/ui_utils.dart';
