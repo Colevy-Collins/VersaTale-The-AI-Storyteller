@@ -1,3 +1,11 @@
+// lib/widgets/action_button.dart
+// -----------------------------------------------------------------------------
+// One‑tap button used throughout the app.
+// • Shows a spinner when [busy] == true.
+// • Automatically disables when [onPressed] == null.
+// • NEW: The label Text now wraps (softWrap: true) so long lines stay readable.
+// -----------------------------------------------------------------------------
+
 import 'package:flutter/material.dart';
 
 class ActionButton extends StatelessWidget {
@@ -8,34 +16,59 @@ class ActionButton extends StatelessWidget {
     this.busy = false,
   });
 
+  /// Button label (can be multi‑line; will wrap automatically).
   final String       label;
-  final VoidCallback? onPressed;
+
+  /// Whether to show a CircularProgressIndicator.
   final bool         busy;
+
+  /// Callback (null → disabled).
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final disabled = onPressed == null;
 
     return ElevatedButton(
-      onPressed: busy ? null : onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: cs.primary,
+        minimumSize   : const Size.fromHeight(48),
+        padding       : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        backgroundColor: disabled
+            ? cs.primary.withOpacity(.3)
+            : cs.primary,
         foregroundColor: cs.onPrimary,
-        minimumSize     : const Size.fromHeight(48),
-        shape           : RoundedRectangleBorder(
+        textStyle     : Theme.of(context).textTheme.titleMedium,
+        shape         : RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side        : BorderSide(color: cs.secondary, width: 1.5),
         ),
-        textStyle: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-        child: busy
-            ? const SizedBox(
-            width: 24, height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2))
-            : Text(label),
+      onPressed: disabled ? null : onPressed,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize     : MainAxisSize.min,
+        children: [
+          // Expanded lets the label wrap instead of being forced into one line.
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              softWrap : true,           // ← NEW: allow wrapping
+              overflow : TextOverflow.visible,
+            ),
+          ),
+          if (busy) ...[
+            const SizedBox(width: 12),
+            SizedBox(
+              height: 18,
+              width : 18,
+              child : CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor : AlwaysStoppedAnimation<Color>(cs.onPrimary),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

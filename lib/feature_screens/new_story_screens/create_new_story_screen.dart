@@ -179,7 +179,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           builder: (_) => MultiplayerHostLobbyScreen(
             sessionId     : sessionId,
             joinCode      : joinCode,
-            playersMap    : {
+            initialPlayers    : {
               1: {
                 'displayName': hostName,
                 'userId'     : FirebaseAuth.instance.currentUser?.uid ?? '',
@@ -216,7 +216,7 @@ class _CreateNewStoryScreenState extends State<CreateNewStoryScreen> {
           builder: (_) => MultiplayerHostLobbyScreen(
             sessionId     : widget.sessionId!,
             joinCode      : widget.joinCode!,
-            playersMap    : widget.initialPlayersMap!,
+            initialPlayers    : widget.initialPlayersMap!,
             fromSoloStory : false,
             fromGroupStory: false,
           ),

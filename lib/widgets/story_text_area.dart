@@ -1,3 +1,11 @@
+// lib/widgets/story_text_area.dart
+// -----------------------------------------------------------------------------
+// Read‑only text area used on the Story screen.
+// • Preserves the original card styling (surface colour, rounded corners, shadow)
+// • Keeps the internal SingleChildScrollView + TextField for easy copy/select
+// • NEW: Scrollbar thumb is always visible and interactive, signalling scroll.
+// -----------------------------------------------------------------------------
+
 import 'package:flutter/material.dart';
 
 class StoryTextArea extends StatelessWidget {
@@ -7,8 +15,11 @@ class StoryTextArea extends StatelessWidget {
     required this.textController,
   });
 
-  final ScrollController      controller;
-  final TextEditingController textController;
+  /// Scroll controller supplied by the parent screen.
+  final ScrollController       controller;
+
+  /// Holds the story text (updated externally by StoryController).
+  final TextEditingController  textController;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +40,9 @@ class StoryTextArea extends StatelessWidget {
         ],
       ),
       child: Scrollbar(
-        controller: controller,
+        controller     : controller,
+        thumbVisibility: true,      // ← NEW: always show = obvious it scrolls
+        interactive    : true,      // ← NEW: users can drag the thumb
         child: SingleChildScrollView(
           controller: controller,
           child: TextField(

@@ -71,7 +71,7 @@ class __JoinViewState extends State<_JoinView> {
           : MultiplayerHostLobbyScreen(
         sessionId: sessionId,
         joinCode: code,
-        playersMap: playersMap,
+        initialPlayers: playersMap,
         fromSoloStory: false,
         fromGroupStory: false,
       );

@@ -1,10 +1,12 @@
 // lib/screens/story_screen.dart
 // -----------------------------------------------------------------------------
 // Main reading / interaction screen (solo + multiplayer).
-// All colours & fonts are pulled from ThemeData so the view adapts to the
-// palette & font chosen in Profile → Theme.
+// • Works on screens as small as 240 × 340 without overflow.
+// • Shows visible scrollbars so users always know more content is available.
+// • Retains all original behaviour (multiplayer lobby, cost display, etc.).
 // -----------------------------------------------------------------------------
 
+import 'dart:math' as math;                        // for tiny‑screen sizing
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -20,9 +22,12 @@ import '../widgets/action_button.dart';
 import '../widgets/next_action_sheet.dart';
 import '../widgets/story_text_area.dart';
 import '../widgets/full_story_dialog.dart';
+
 import 'dashboard_screen.dart';
 import '../feature_screens/login_screens/main_splash_screen.dart';
 import 'multiplayer_screens/multiplayer_host_lobby_screen.dart';
+
+// ───────────────────────── Menu enum ─────────────────────────
 
 enum _MenuOption {
   backToScreen,
@@ -32,6 +37,8 @@ enum _MenuOption {
   logout,
   closeMenu,
 }
+
+// ───────────────────────── Widget ─────────────────────────
 
 class StoryScreen extends StatefulWidget {
   const StoryScreen({
@@ -46,34 +53,39 @@ class StoryScreen extends StatefulWidget {
     this.estimatedCostUsd = 0.0,
   });
 
-  final String initialLeg;
+  final String       initialLeg;
   final List<String> options;
-  final String storyTitle;
-  final String? sessionId;   // null ⇒ solo
-  final String? joinCode;
-  final int    inputTokens;
-  final int    outputTokens;
-  final double estimatedCostUsd;
+  final String       storyTitle;
+  final String?      sessionId;      // null ⇒ solo
+  final String?      joinCode;
+
+  final int          inputTokens;
+  final int          outputTokens;
+  final double       estimatedCostUsd;
 
   @override
   State<StoryScreen> createState() => _StoryScreenState();
 }
 
-/* ───────────────────────────────────────────────────────────────────── */
+// ───────────────────────── State ─────────────────────────
 
 class _StoryScreenState extends State<StoryScreen> {
-  late final StoryController ctrl;
-
-  final ScrollController _scrollCtrl = ScrollController();
+  // Controllers & services ----------------------------------------------------
+  late final StoryController      ctrl;
+  final  ScrollController         _storyCtrl = ScrollController();
+  final  ScrollController         _pageCtrl  = ScrollController();   // page‑level
   late final TextEditingController _txtCtrl;
 
   final _authSvc  = AuthService();
   final _storySvc = StoryService();
   final _lobbySvc = LobbyRtdbService();
 
+  // ───────── lifecycle ─────────
+
   @override
   void initState() {
     super.initState();
+
     ctrl = StoryController(
       initialLeg    : widget.initialLeg,
       initialOptions: widget.options,
@@ -93,9 +105,9 @@ class _StoryScreenState extends State<StoryScreen> {
     ctrl.addListener(() {
       if (_txtCtrl.text != ctrl.text) {
         _txtCtrl.text = ctrl.text;
-        _scrollCtrl.jumpTo(0);
+        _storyCtrl.jumpTo(0);
       }
-      setState(() {});      // refresh badges / buttons
+      setState(() {}); // refresh UI
     });
   }
 
@@ -103,26 +115,28 @@ class _StoryScreenState extends State<StoryScreen> {
   void dispose() {
     ctrl.disposeController();
     _txtCtrl.dispose();
-    _scrollCtrl.dispose();
+    _storyCtrl.dispose();
+    _pageCtrl.dispose();
     super.dispose();
   }
 
-  /* ───────── snack / error helpers ───────── */
+  // ───────── helpers ─────────
 
-  void _showSnack(String m) {
+  void _showSnack(String msg) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(m, style: tt.bodyMedium?.copyWith(color: cs.onPrimary)),
+        content: Text(msg, style: tt.bodyMedium?.copyWith(color: cs.onPrimary)),
         backgroundColor: cs.primary,
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
-  void _showError(String m) => showError(context, m);
 
-  /* ───────── option sheet + back-one-leg ───────── */
+  void _showError(String msg) => showError(context, msg);
+
+  // ───────── option sheet & back one leg ─────────
 
   void _optionSheet() {
     final canPick = !ctrl.busy &&
@@ -132,6 +146,9 @@ class _StoryScreenState extends State<StoryScreen> {
 
     showModalBottomSheet(
       context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      constraints: dialogConstraints(context),
       builder: (_) => NextActionSheet(
         options     : ctrl.options,
         busy        : ctrl.busy,
@@ -151,32 +168,39 @@ class _StoryScreenState extends State<StoryScreen> {
     if (ok) await ctrl.backOneLeg();
   }
 
-  /* ───────── kicked from multiplayer ───────── */
+  // ───────── kicked from multiplayer session ─────────
 
   Future<void> _handleKick() async {
     if (!mounted) return;
     _showSnack('You were removed from the session.');
     Navigator.pushReplacement(
-        context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
   }
 
-  /* ───────── menu helpers ───────── */
+  // ───────── menu actions ─────────
 
   Future<void> _showFullStory() async {
     try {
       final res = await _storySvc.getFullStory(
-        sessionId:
-        (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
+        sessionId: (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
       );
       if (!mounted) return;
+
+      final List<String> opts = List<String>.from(res['options'] ?? []);
+      final bool storyEnded =
+      opts.any((o) => o.toLowerCase().contains('the story ends'));
 
       showDialog(
         context: context,
         builder: (_) => FullStoryDialog(
-          storyText: res['initialLeg'] ?? '',
-          choiceOptions: List<String>.from(res['options'] ?? []),
-          isChoiceSelectable: !ctrl.busy &&
-              (ctrl.phase == StoryPhase.story || ctrl.phase == StoryPhase.vote),
+          storyText          : res['initialLeg'] ?? '',
+          choiceOptions      : opts,
+          isChoiceSelectable : !ctrl.busy &&
+              (ctrl.phase == StoryPhase.story ||
+                  ctrl.phase == StoryPhase.vote) &&
+              !storyEnded,
           onChoiceSelected: (opt) {
             Navigator.pop(context);
             ctrl.chooseNext(opt);
@@ -195,8 +219,7 @@ class _StoryScreenState extends State<StoryScreen> {
   Future<void> _saveStory() async {
     try {
       final r = await _storySvc.saveStory(
-        sessionId:
-        (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
+        sessionId: (ctrl.isMultiplayer && !ctrl.isHost) ? widget.sessionId : null,
       );
       _showSnack(r['message'] ?? 'Story saved.');
     } catch (e) {
@@ -204,18 +227,16 @@ class _StoryScreenState extends State<StoryScreen> {
     }
   }
 
-  /* ───────── convert solo → group or back to lobby ───────── */
-
   Future<void> _createGroupSession() async {
-    setState(() {}); // show spinner if you add one later
     try {
       if (!ctrl.isMultiplayer) {
-        final backend      = await _storySvc.createMultiplayerSession("false");
+        // Solo → create a new multiplayer session -----------------------------
+        final backend      = await _storySvc.createMultiplayerSession('false');
         final newSessionId = backend['sessionId'] as String;
         final newJoinCode  = backend['joinCode']  as String;
 
-        // seed lobby
         final hostName = FirebaseAuth.instance.currentUser?.displayName ?? 'Host';
+
         await _lobbySvc.createSession(
           sessionId     : newSessionId,
           hostName      : hostName,
@@ -223,7 +244,6 @@ class _StoryScreenState extends State<StoryScreen> {
           newGame       : false,
         );
 
-        // broadcast current solo story (incl. counters)
         await _lobbySvc.advanceToStoryPhase(
           sessionId: newSessionId,
           storyPayload: {
@@ -236,11 +256,6 @@ class _StoryScreenState extends State<StoryScreen> {
           },
         );
 
-        final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-        final map = <int, Map<String, dynamic>>{
-          1: {'displayName': hostName, 'userId': uid},
-        };
-
         await _lobbySvc.updatePhase(
           sessionId: newSessionId,
           phase    : StoryPhase.lobby.asString,
@@ -252,18 +267,22 @@ class _StoryScreenState extends State<StoryScreen> {
           context,
           MaterialPageRoute(
             builder: (_) => MultiplayerHostLobbyScreen(
-              sessionId     : newSessionId,
-              joinCode      : newJoinCode,
-              playersMap    : map,
-              fromSoloStory : true,
-              fromGroupStory: false,
+              sessionId      : newSessionId,
+              joinCode       : newJoinCode,
+              initialPlayers : {
+                1: {
+                  'displayName': hostName,
+                  'userId'     : FirebaseAuth.instance.currentUser?.uid ?? '',
+                },
+              },
+              fromSoloStory  : true,
+              fromGroupStory : false,
             ),
           ),
         );
       } else {
-        // already MP → go back to lobby
-        final map = await _lobbySvc.fetchPlayerList(
-            sessionId: widget.sessionId!);
+        // Already MP → return to lobby ----------------------------------------
+        final map = await _lobbySvc.fetchPlayerList(sessionId: widget.sessionId!);
         await _lobbySvc.updatePhase(
           sessionId: widget.sessionId!,
           phase    : StoryPhase.lobby.asString,
@@ -274,23 +293,21 @@ class _StoryScreenState extends State<StoryScreen> {
           context,
           MaterialPageRoute(
             builder: (_) => MultiplayerHostLobbyScreen(
-              sessionId     : widget.sessionId!,
-              joinCode      : widget.joinCode!,
-              playersMap    : map,
-              fromSoloStory : false,
-              fromGroupStory: true,
+              sessionId      : widget.sessionId!,
+              joinCode       : widget.joinCode!,
+              initialPlayers : map,
+              fromSoloStory  : false,
+              fromGroupStory : true,
             ),
           ),
         );
       }
     } catch (e) {
       _showError('Error creating session: $e');
-    } finally {
-      if (mounted) setState(() {});
     }
   }
 
-  /* ───────── build ───────── */
+  // ───────── build ─────────
 
   @override
   Widget build(BuildContext context) {
@@ -304,6 +321,7 @@ class _StoryScreenState extends State<StoryScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
+
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: cs.primary.withOpacity(.5),
@@ -338,12 +356,14 @@ class _StoryScreenState extends State<StoryScreen> {
               PopupMenuItem(value: _MenuOption.closeMenu,
                   child: Text('Close Menu')),
             ],
-            onSelected: (ch) async {
-              switch (ch) {
+            onSelected: (choice) async {
+              switch (choice) {
                 case _MenuOption.backToScreen:
+                  if (!mounted) return;
                   Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()));
+                      MaterialPageRoute(
+                          builder: (_) => const HomeScreen()));
                   break;
                 case _MenuOption.startGroupStory:
                   await _createGroupSession();
@@ -370,64 +390,112 @@ class _StoryScreenState extends State<StoryScreen> {
         ],
       ),
 
+      // ───────── parchment background + responsive content ─────────
       body: Stack(
         children: [
           Positioned.fill(
-              child: Image.asset('assets/parchment_updated.png',
-                  fit: BoxFit.cover)),
+            child: Image.asset('assets/parchment_updated.png', fit: BoxFit.cover),
+          ),
+
+          // Layout adapts to screen height; on tiny screens (<340 px) the whole
+          // page becomes scrollable with a visible scrollbar.
           SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final bool isTiny = constraints.maxHeight < 340;
+
+                // content builder (column reused for both layouts) ------------
+                Widget buildColumn({required bool scrollable}) {
+                  final children = <Widget>[
+                    // story text area (has its own always‑visible scrollbar)
+                    if (scrollable)
+                      SizedBox(
+                        height: math.max(constraints.maxHeight * .45, 80),
+                        child: StoryTextArea(
+                          controller     : _storyCtrl,
+                          textController : _txtCtrl,
+                        ),
+                      )
+                    else
                       Expanded(
                         child: StoryTextArea(
-                          controller     : _scrollCtrl,
+                          controller     : _storyCtrl,
                           textController : _txtCtrl,
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      ActionButton(
-                        label: 'Choose Next Action',
-                        busy : ctrl.busy,
+
+                    const SizedBox(height: 20),
+
+                    // choose next action button --------------------------------
+                    AnimatedOpacity(
+                      opacity : canPick ? 1.0 : 0.4,
+                      duration: const Duration(milliseconds: 300),
+                      child   : ActionButton(
+                        label    : 'Choose Next Action',
+                        busy     : ctrl.busy,
                         onPressed: canPick ? _optionSheet : null,
                       ),
-                      if (ctrl.isMultiplayer &&
-                          ctrl.phase == StoryPhase.vote) ...[
-                        const SizedBox(height: 20),
-                        if (ctrl.isHost && !ctrl.busy)
-                          ...[
-                            ActionButton(
-                              label: 'Resolve Votes',
-                              busy : ctrl.busy,
-                              onPressed: ctrl.resolveVotesManually,
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                        ctrl.busy
-                            ? const CircularProgressIndicator()
-                            : Text('Waiting for votes…',
-                            style: tt.bodyLarge,
-                            textAlign: TextAlign.center),
-                      ],
-                      if (ctrl.isMultiplayer &&
-                          ctrl.isHost &&
-                          (ctrl.inLobby > 0 ||
-                              ctrl.phase == StoryPhase.lobby)) ...[
-                        const SizedBox(height: 10),
+                    ),
+
+                    // multiplayer status / host controls -----------------------
+                    if (ctrl.isMultiplayer &&
+                        ctrl.phase == StoryPhase.vote) ...[
+                      const SizedBox(height: 20),
+                      if (ctrl.isHost && !ctrl.busy) ...[
                         ActionButton(
-                          label: 'Bring Everyone Back',
-                          busy : ctrl.busy,
-                          onPressed: ctrl.hostBringEveryoneBack,
+                          label    : 'Resolve Votes',
+                          busy     : ctrl.busy,
+                          onPressed: ctrl.resolveVotesManually,
                         ),
+                        const SizedBox(height: 10),
                       ],
+                      ctrl.busy
+                          ? const CircularProgressIndicator()
+                          : Text('Waiting for votes…',
+                          style: tt.bodyLarge,
+                          textAlign: TextAlign.center),
                     ],
+                    if (ctrl.isMultiplayer &&
+                        ctrl.isHost &&
+                        (ctrl.inLobby > 0 ||
+                            ctrl.phase == StoryPhase.lobby)) ...[
+                      const SizedBox(height: 10),
+                      ActionButton(
+                        label    : 'Bring Everyone Back',
+                        busy     : ctrl.busy,
+                        onPressed: ctrl.hostBringEveryoneBack,
+                      ),
+                    ],
+                  ];
+
+                  // page‑level scroll view (tiny) versus plain padding (normal)
+                  return scrollable
+                      ? Scrollbar(
+                    controller     : _pageCtrl,
+                    thumbVisibility: true,
+                    interactive    : true,
+                    child: SingleChildScrollView(
+                      controller: _pageCtrl,
+                      padding   : const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: children,
+                      ),
+                    ),
+                  )
+                      : Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(children: children),
+                  );
+                }
+
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: buildColumn(scrollable: isTiny),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],

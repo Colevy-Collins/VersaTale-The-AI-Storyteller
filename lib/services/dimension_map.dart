@@ -17,14 +17,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "A shifting dreamscape that defies conventional geography",
       "A cosmic spacecraft",
     ],
-    "Physical Environment": [
-      "Towering desert dunes with occasional hidden oases",
-      "Dense, haunted forests",
-      "Gravity-defying landscapes where directions shift unexpectedly",
-      "Rolling plains frequently hammered by harsh storms",
-      "Volcanic terrain scarred by ancient eruptions",
-      "Frigid, snowy environment marked with icebergs and hidden caves"
-    ],
     "Cultural & Social Context": [
       "Deeply depraved society with strict caste systems",
       "Nomadic tribes competing for scarce resources",
@@ -49,14 +41,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "Eerie and silent, each sound amplified by emptiness",
       "Chaotic and unpredictable"
     ],
-    "World-Building Details": [
-      "Portals to alternate dimensions appear sporadically",
-      "Celestial bodies influencing magic or fate cycles",
-      "Trade routes bridging distant cultures and species",
-      "Residual energies from ancient civilizations",
-      "Forbidden zones that alter reality in bizarre ways",
-      "Relics or runes that spark small-scale miracles"
-    ]
   },
   "Narrative": {
     "Genre": [
@@ -106,15 +90,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
         "Average individual thrust into extraordinary events",
         "Wandering scholar seeking lost knowledge",
         "Summoned outsider from a parallel reality"
-      ],
-      "Protagonist's Abilities": [
-        "Innate magic that remains largely untapped",
-        "Advanced cybernetic implants from experimental tech",
-        "Elite combat training from a clandestine order",
-        "Natural affinity for stealth and subterfuge",
-        "Psionic talents for telepathy or telekinesis",
-        "Ingenious tinkerer capable of jury-rigging gadgets",
-        "Diplomatic skillset capable of swaying factions"
       ],
       "Protagonist's Personality": [
         "Harsh with a hidden soft side",
@@ -199,17 +174,6 @@ const Map<String, dynamic> groupedDimensionOptions = {
       "Major fork-in-the-road decisions leading to distinctly different conclusions",
       "Random or chance-based event triggers adding variability to each playthrough",
       "Return visits to earlier nodes, where prior choices may now have different results"
-    ],
-    "Fail States": [
-      "A growing burden of guilt that steadily erodes resolve, each misstep pushing the hero closer to a tragic breakdown.",
-      "Allies becoming disillusioned or turning hostile, leading to isolation and a near-inevitable downfall if trust isn’t rebuilt.",
-      "A spiraling series of compromises where each wrong decision darkens the path, eventually locking them into a catastrophic finale.",
-      "Escalating corruption that twists the protagonist’s motives, culminating in a self-inflicted collapse or villainous turn.",
-      "Key resources or strongholds lost one by one, leaving the hero ill-equipped for the final confrontation and dooming them to failure.",
-      "Public outrage or a severe reputation collapse that triggers desperation, increasing the likelihood of irreversible tragedy.",
-      "Critical moments turning into permanent setbacks—once a wrong choice is made, the story edges closer to an inevitable bleak end.",
-      "Emotional fallout from poor decisions causing alliances to fracture, leaving the hero alone in a final stand they cannot win.",
-      "An overarching doom mechanic: each bad call elevates the threat or shortens the timeline, hastening a cataclysmic ending."
     ],
     "Minimum Number of Options" : [
       "2",
