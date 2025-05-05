@@ -28,11 +28,13 @@ void showError(BuildContext ctx, String msg) {
 
 // ––– External links –––
 Future<void> openTutorialPdf(BuildContext ctx) async {
-  const url = 'https://drive.google.com/file/d/1uuDpQgOMNE-SEmvWfmKA36rhoLYsXcSW/preview';
+  // This forces the browser to treat it as a PDF, not a Drive preview.
+  const url = 'https://drive.google.com/file/d/1VnH6lyE_EV_CeTVb9jEdHjIDnJOrcP9Y/preview';
   showSnack(ctx, 'Opening tutorial…');
   final uri = Uri.parse(url);
 
   if (await canLaunchUrl(uri)) {
+    // On web this will open in a new tab where Chrome's PDF viewer handles it
     await launchUrl(uri, webOnlyWindowName: '_blank');
   } else {
     showError(ctx, 'Could not open tutorial PDF.');
