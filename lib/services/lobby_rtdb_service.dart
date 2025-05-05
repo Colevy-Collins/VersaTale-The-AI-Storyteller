@@ -263,6 +263,7 @@ class LobbyRtdbService {
       'storyPayload': storyPayload,
       'resolvedChoice': null,
       'phase': 'story',
+      'inLobbyCount': 0,
     });
   });
 
